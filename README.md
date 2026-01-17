@@ -28,10 +28,29 @@ Fast, context-efficient markdown documentation search tool designed for [Claude 
 - [Bun](https://bun.sh/) (recommended) or Node.js 18+
 - npm or pnpm
 
-### Install
+### Option 1: Bun (Recommended)
 
 ```bash
-# Clone the repository
+bun add -g cc-md-search-cli
+```
+
+The `ccmds` command is automatically registered globally.
+
+**Package location:** `~/.bun/install/global/node_modules/cc-md-search-cli/`
+
+### Option 2: NPM
+
+```bash
+npm i -g cc-md-search-cli
+```
+
+The `ccmds` command is automatically registered globally.
+
+**Package location:** Run `npm root -g` to find the path (typically `/usr/local/lib/node_modules/cc-md-search-cli/` or `~/.npm-global/lib/node_modules/cc-md-search-cli/`)
+
+### Option 3: Clone Repository
+
+```bash
 git clone https://github.com/bjeber/cc-md-search-cli.git
 cd cc-md-search-cli
 
@@ -39,11 +58,15 @@ cd cc-md-search-cli
 bun install
 # or: npm install
 
-# Link the CLI globally
+# Link the CLI globally (required for cloned repos)
 npm link
 ```
 
-After linking, the `ccmds` command will be available globally.
+**Package location:** Your cloned directory
+
+**Skill & Rule files** are located in the package directory:
+- `skills/SKILL.md` - Claude Code skill template
+- `rules/docs-search.mdc` - Cursor IDE rule template
 
 ## Quick Start
 
