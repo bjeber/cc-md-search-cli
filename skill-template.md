@@ -7,44 +7,40 @@ description: This skill enables efficient searching of markdown documentation us
 
 ## ⚙️ CONFIGURATION - EDIT THIS SECTION
 
-**IMPORTANT: Set your documentation path here before using this skill:**
+**IMPORTANT: Configure your documentation paths here before using this skill:**
 
-```
-DOCS_PATH="./your-docs-folder-here"
-```
+**DOCS_PATHS** (configure one or more documentation directories):
+- `./docs` - Main documentation
+- `./api/docs` - API reference (optional)
+- `./guides` - User guides (optional)
 
-Replace `./your-docs-folder-here` with the actual path to your documentation.
+> Remove paths you don't need. At least one path is required.
 
-### Common Configuration Examples:
+### Configuration Examples:
 
+**Single docs folder:**
+- `./docs` - Main documentation
+
+**Multiple documentation locations:**
+- `./docs` - Main documentation
+- `./api/docs` - API reference
+- `./guides` - User guides
+
+**Monorepo with multiple projects:**
+- `./packages/web/docs` - Web app docs
+- `./packages/api/docs` - API docs
+- `./packages/shared/docs` - Shared library docs
+
+When multiple paths are configured, pass all paths to ccmds:
 ```bash
-# Single docs folder:
-DOCS_PATH="./docs"
-
-# Project-specific:
-DOCS_PATH="./my-project-docs"
-
-# Documentation subfolder:
-DOCS_PATH="./documentation/markdown"
-
-# Nested in project:
-DOCS_PATH="./src/docs"
-```
-
-### Project-Specific Paths (Optional):
-
-If you have documentation scattered across multiple locations, you can define additional paths:
-
-```bash
-# Additional paths (optional)
-WEB_DOCS_PATH="./web-app/docs"
-API_DOCS_PATH="./api/docs"
-CMS_DOCS_PATH="./cms/docs"
+ccmds find "authentication" ./docs ./api/docs ./guides -l 5
+ccmds grep "TODO" ./docs ./api/docs
+ccmds list ./docs ./api/docs ./guides
 ```
 
 ### Auto-Search Behavior:
 
-When configured, Claude Code will **automatically search** the configured `DOCS_PATH` when the user asks questions about:
+When configured, Claude Code will **automatically search** the configured `DOCS_PATHS` when the user asks questions about:
 - Setup, installation, configuration
 - API endpoints, usage
 - Architecture, design decisions
@@ -54,24 +50,42 @@ When configured, Claude Code will **automatically search** the configured `DOCS_
 
 **No need to ask** - just search immediately using the configured path.
 
+### Context Efficiency Features:
+
+The CLI includes optimizations to reduce context usage by 30-50%:
+- **Smart context** - Preserves code blocks and paragraph boundaries
+- **Heading paths** - Shows document structure for each match
+- **Adaptive previews** - Top results get more content automatically
+- **New commands** - `outline` (view structure) and `section` (extract specific sections)
+
+### Extended Search Syntax:
+
+The `find` command supports advanced search patterns:
+- **AND**: `word1 word2` (space-separated, all must match)
+- **OR**: `word1 | word2` (pipe-separated, either matches)
+- **Exact**: `'phrase` (single quote prefix for exact substring)
+- **Prefix**: `^Start` (caret for starts-with)
+- **Suffix**: `End$` (dollar for ends-with)
+
 ---
 
 ## 📋 Quick Start Checklist
 
 Before using this skill:
-- [ ] Replace `./your-docs-folder-here` with your actual docs path
-- [ ] Verify the path exists: `ls ./your-docs-folder-here`
-- [ ] Test the search: `ccmds list ./your-docs-folder-here`
-- [ ] (Optional) Configure additional project-specific paths
+- [ ] Edit `DOCS_PATHS` above with your actual documentation directories
+- [ ] Verify the paths exist: `ls ./docs` (for each configured path)
+- [ ] Test the search: `ccmds list ./docs` (or with all your paths)
+- [ ] View structure: `ccmds outline ./docs -d 2`
+- [ ] Remove any paths you don't need from `DOCS_PATHS`
 - [ ] Save this file to your Claude Code skills directory
 
 ---
 
 Once configured, see the full SKILL.md file for:
-- Complete command reference
+- Complete command reference (6 commands: find, grep, list, show, outline, section)
 - Workflow strategies
 - Output mode selection
 - Best practices
 - Example interactions
 
-**After configuration, copy the configured DOCS_PATH to the main SKILL.md file.**
+**After configuration, copy your configured DOCS_PATHS list to the main SKILL.md file.**
