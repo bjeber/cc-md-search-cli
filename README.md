@@ -1,3 +1,5 @@
+![CC-MD-Search-CLI](assets/header.png)
+
 # CC-MD-Search-CLI
 
 **Claude Code Markdown Search - Efficient documentation search CLI for AI coding assistants**
