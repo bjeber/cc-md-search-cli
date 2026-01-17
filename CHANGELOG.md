@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2] - 2026-01-17
+
+### Changed
+- Reorganized installation section with grouped options (Bun, NPM, Clone Repository)
+- Added package location paths for each installation method
+- Added guidance for locating skill and rule template files
+- Clarified automatic CLI registration for global installs
+
+### Fixed
+- Fixed missing `-g` flag for npm global install command
+
+### Added
+- Header image to README
+
 ## [1.0.1] - 2026-01-17
 
 ### Added
@@ -43,5 +57,6 @@ All notable changes to this project will be documented in this file.
 - Configurable search options (depth, limit, threshold)
 - Claude Code skill integration (`md-search`)
 
+[1.0.2]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/bjeber/cc-md-search-cli/releases/tag/v1.0.0
