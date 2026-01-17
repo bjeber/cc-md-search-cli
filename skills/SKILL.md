@@ -1,3 +1,8 @@
+---
+name: md-search
+description: This skill enables efficient searching of markdown documentation using the ccmds CLI. Use this skill when the user asks about documentation, needs to find information across many markdown files, or wants to discover content without knowing exact file names. Provides fuzzy search, regex pattern matching, and context-efficient output modes.
+---
+
 # Markdown Search CLI Skill
 
 ## Overview
