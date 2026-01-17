@@ -1,0 +1,7 @@
+node_modules/
+.private/
+.claude/settings.local.json
+.DS_Store
+*.swp
+*.swo
+*.backup

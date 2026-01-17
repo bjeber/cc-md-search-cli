@@ -1,0 +1,36 @@
+{
+  "name": "cc-md-search-cli",
+  "version": "1.0.0",
+  "description": "Claude Code Markdown Search - Efficient documentation search CLI for Claude Code integration",
+  "type": "module",
+  "bin": {
+    "ccmds": "./src/cli.js"
+  },
+  "scripts": {
+    "build": "echo 'No build needed for Bun'",
+    "link": "npm link"
+  },
+  "keywords": [
+    "markdown",
+    "search",
+    "cli",
+    "claude-code",
+    "documentation",
+    "fuzzy-search"
+  ],
+  "author": "Bertram Eber",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bjeber/cc-md-search-cli.git"
+  },
+  "homepage": "https://github.com/bjeber/cc-md-search-cli#readme",
+  "bugs": {
+    "url": "https://github.com/bjeber/cc-md-search-cli/issues"
+  },
+  "dependencies": {
+    "commander": "^11.1.0",
+    "gray-matter": "^4.0.3",
+    "fuse.js": "^7.0.0"
+  }
+}
