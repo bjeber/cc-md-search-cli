@@ -110,33 +110,42 @@ ccmds show ./docs/guide.md --body-only
 
 ## Claude Code Integration
 
-To use this tool with Claude Code, copy the skill template to your Claude Code skills directory.
+To use this tool with Claude Code, install the skill to your Claude Code skills directory.
 
-### 1. Configure Your Docs Path
-
-Edit `skills/SKILL.md` and update the `DOCS_PATH` variable:
-
-```
-DOCS_PATH="./docs"
-```
-
-Replace `./docs` with the path to your documentation folder.
-
-### 2. Copy Skill to Claude Code
+### 1. Install the Skill
 
 ```bash
-# Find your Claude Code skills directory (typically ~/.claude/skills/)
-# Copy the configured skill
-cp skills/SKILL.md ~/.claude/skills/md-search.md
+# Create the skill directory
+mkdir -p ~/.claude/skills/md-search
+
+# Copy the skill file
+cp skills/SKILL.md ~/.claude/skills/md-search/SKILL.md
 ```
 
-### 3. Use with Claude Code
+### 2. Use with Claude Code
 
-Once configured, Claude Code can automatically search your documentation when you ask questions:
+Once installed, the skill will be available as `/md-search`. Claude Code can automatically search your documentation when you ask questions:
 
 - "How do I set up authentication?"
 - "What are the API endpoints?"
 - "Where is the deployment guide?"
+
+Claude will use `ccmds` to search your documentation with minimal context usage.
+
+### 3. Skill Structure
+
+The skill follows Claude Code's skill format:
+
+```
+~/.claude/skills/md-search/
+└── SKILL.md          # Skill definition with YAML frontmatter
+```
+
+The SKILL.md includes:
+- **YAML frontmatter** with `name` and `description` for skill registration
+- **Command reference** for all `ccmds` commands
+- **Workflow strategies** for efficient documentation search
+- **Best practices** for context-efficient searches
 
 ## Output Modes
 
