@@ -1,6 +1,6 @@
 {
   "name": "cc-md-search-cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Claude Code Markdown Search - Efficient documentation search CLI for Claude Code integration",
   "type": "module",
   "bin": {
@@ -8,7 +8,10 @@
   },
   "scripts": {
     "build": "echo 'No build needed for Bun'",
-    "link": "npm link"
+    "link": "npm link",
+    "test": "bun test",
+    "test:coverage": "bun test --coverage",
+    "test:watch": "bun test --watch"
   },
   "keywords": [
     "markdown",

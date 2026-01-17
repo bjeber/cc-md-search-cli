@@ -54,6 +54,9 @@ cp skills/SKILL.md ~/.claude/skills/md-search.md
 # Test that the CLI can find your docs
 ccmds list ./docs
 
+# View document structure
+ccmds outline ./docs -d 2
+
 # Try a search
 ccmds find "setup" ./docs -l 5
 ```
@@ -99,6 +102,35 @@ Once configured, Claude Code will **automatically search** your documentation wh
 - "How do I configure the database?" → Searches `./docs`
 
 **No manual path specification needed!**
+
+## Context Efficiency Features
+
+The CLI includes several optimizations to reduce AI context usage by 30-50%:
+
+### Smart Context (grep)
+- **Code block preservation** - Returns full code blocks when match is inside one
+- **Paragraph boundaries** - Stops at blank lines instead of arbitrary line counts
+- **Heading paths** - Shows `## Setup > ### Prerequisites` for each match
+- **Deduplication** - Overlapping matches are merged
+
+### Adaptive Previews (find)
+- Top 3 results: 600 characters
+- Results 4-7: 300 characters
+- Remaining: 150 characters
+
+### Frontmatter Filtering
+Only includes useful fields: `title`, `description`, `tags`, `category`, `summary`, `keywords`
+
+### New Commands for Targeted Access
+- `ccmds outline` - View structure without loading content
+- `ccmds section` - Extract only the section you need
+
+### Opt-out with --raw
+Use `--raw` flag to disable optimizations if needed:
+```bash
+ccmds grep "pattern" ./docs --raw -c 3  # Line-based context
+ccmds find "query" ./docs --raw          # Full frontmatter, fixed previews
+```
 
 ## Recommended Documentation Structure
 
