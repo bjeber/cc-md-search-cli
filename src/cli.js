@@ -939,7 +939,7 @@ function formatOutput(results, mode) {
 program
   .name('ccmds')
   .description('Claude Code Markdown Search - CLI for efficient document querying')
-  .version('1.0.2')
+  .version('1.0.3')
   .option('--config <path>', 'Path to config file')
   .option('--no-config', 'Ignore config file')
   .option('--no-cache', 'Skip cache for this command');

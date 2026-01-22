@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3] - 2026-01-22
+
+### Added
+- **Configuration file support** - `.ccmdsrc` files for project-specific settings
+- **Hierarchical config lookup** - Project → parent directories → home directory → defaults
+- **`init` command** - Create `.ccmdsrc` config files with `ccmds init`
+- **`config` command** - View current effective configuration and file path
+- **Exclude pattern support** - Glob patterns to exclude files/directories
+- **Result caching** - Optional caching for `find` and `grep` results
+- **`cache` command** - `ccmds cache stats` and `ccmds cache clear`
+- **`--no-cache` flag** - Skip cache for individual commands
+- **Modular skills documentation** - Split into SKILL.md + reference sub-files
+
+### Changed
+- **Rebranded to ccmds** - Skills and rules renamed from md-search to ccmds
+- **Default output mode** - Changed from `compact` to `json` for better AI consumption
+- **JSON output optimized** - Compact format with no whitespace, rounded scores
+- **README reorganized** - Focused on AI assistant use case at top
+- **Cursor rule renamed** - `docs-search.mdc` → `ccmds.mdc`
+- **Skills structure** - Slim SKILL.md (~90 lines) with detailed sub-files:
+  - `ccmds-commands.md` - Full command reference
+  - `ccmds-examples.md` - Workflows and patterns
+  - `ccmds-config.md` - Configuration schema
+
+### Fixed
+- Glob pattern matching for exclude patterns (recursive matching)
+
 ## [1.0.2] - 2026-01-17
 
 ### Changed
@@ -57,6 +84,7 @@ All notable changes to this project will be documented in this file.
 - Configurable search options (depth, limit, threshold)
 - Claude Code skill integration (`ccmds`)
 
+[1.0.3]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/bjeber/cc-md-search-cli/releases/tag/v1.0.0
