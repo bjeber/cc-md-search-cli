@@ -37,6 +37,16 @@ cd your-project
 ccmds init -d ./docs    # Creates .ccmdsrc config file
 ```
 
+This creates a `.ccmdsrc` file with `documentDirectories` pointing to your docs folder. **This is the key setting** - it tells ccmds where your documentation lives:
+
+```json
+{
+  "documentDirectories": ["./docs"]
+}
+```
+
+Adjust the path to match your project's documentation location (e.g., `./documentation`, `./wiki`, or multiple directories).
+
 ### 3. Set Up Your AI Assistant
 
 **For Claude Code:**
