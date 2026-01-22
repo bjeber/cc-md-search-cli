@@ -1047,11 +1047,21 @@ describe('formatOutput', () => {
     }
   ];
 
-  test('json mode returns valid JSON', () => {
+  test('json mode returns valid compact JSON', () => {
     const output = formatOutput(sampleResults, 'json');
     const parsed = JSON.parse(output);
 
-    expect(parsed).toEqual(sampleResults);
+    // Compact JSON transforms the structure for AI consumption
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].file).toBe('test.md');
+    expect(parsed[0].frontmatter).toEqual({ title: 'Test' });
+    expect(parsed[0].matches).toHaveLength(1);
+    expect(parsed[0].matches[0].line).toBe(10);
+    expect(parsed[0].matches[0].heading).toBe('# Main > ## Section');
+    expect(parsed[0].matches[0].text).toBe('Test line content');
+    expect(parsed[0].matches[0].context).toBe('Full context here');
+    // No whitespace in compact JSON
+    expect(output).not.toContain('\n');
   });
 
   test('files mode returns only file paths', () => {

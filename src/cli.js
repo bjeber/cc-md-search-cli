@@ -309,7 +309,7 @@ function generateDefaultConfig(options = {}) {
     aliases: {}
   };
 
-  return JSON.stringify(config, null, 2);
+  return JSON.stringify(config);
 }
 
 // ============================================================================
@@ -659,7 +659,48 @@ function fuzzySearch(files, query, options) {
 // Format output
 function formatOutput(results, mode) {
   if (mode === 'json') {
-    return JSON.stringify(results, null, 2);
+    // Compact JSON optimized for AI consumption
+    const compactResults = results.map(r => {
+      const out = { file: r.file };
+
+      // Round score to 3 decimal places if present
+      if (r.score !== undefined) {
+        out.score = Math.round(r.score * 1000) / 1000;
+      }
+
+      // Include title only if not in frontmatter (avoid duplication)
+      if (r.title && (!r.frontmatter || r.frontmatter.title !== r.title)) {
+        out.title = r.title;
+      }
+
+      // Include frontmatter if present and non-empty
+      if (r.frontmatter && Object.keys(r.frontmatter).length > 0) {
+        out.frontmatter = r.frontmatter;
+      }
+
+      // Include matches for grep results
+      if (r.matches) {
+        out.matches = r.matches.map(m => ({
+          line: m.lineNumber,
+          heading: m.headingPath || undefined,
+          text: m.line,
+          context: m.context
+        })).map(m => {
+          // Remove undefined values
+          Object.keys(m).forEach(k => m[k] === undefined && delete m[k]);
+          return m;
+        });
+      }
+
+      // Include preview for find results
+      if (r.preview) {
+        out.preview = r.preview.trim();
+      }
+
+      return out;
+    });
+
+    return JSON.stringify(compactResults);
   }
 
   if (mode === 'files') {
@@ -874,7 +915,7 @@ program
           const headings = extractHeadings(lines).filter(h => h.level <= maxDepth);
 
           if (options.output === 'json') {
-            console.log(JSON.stringify({ file: targetPath, headings }, null, 2));
+            console.log(JSON.stringify({ file: targetPath, headings }));
           } else {
             console.log(`📄 ${targetPath}`);
             headings.forEach(h => {
@@ -927,11 +968,7 @@ program
     }
 
     if (options.output === 'json') {
-      console.log(JSON.stringify({
-        file,
-        heading,
-        content: sectionContent
-      }, null, 2));
+      console.log(JSON.stringify({ file, heading, content: sectionContent }));
     } else {
       console.log(sectionContent);
     }
