@@ -75,6 +75,31 @@ The CLI looks for config files in this order:
 | `preview.otherResults` | `number` | `150` | Preview chars for remaining |
 | `frontmatterFields` | `string[]` | See above | Frontmatter fields to include |
 | `extensions` | `string[]` | `[".md", ".markdown"]` | File extensions |
+| `cache.enabled` | `boolean` | `false` | Enable result caching |
+| `cache.ttl` | `number` | `300` | Cache expiration in seconds |
+| `cache.maxEntries` | `number` | `50` | Max cached queries |
+
+---
+
+## Caching
+
+Enable caching to speed up repeated searches:
+
+```json
+{
+  "cache": {
+    "enabled": true,
+    "ttl": 300,
+    "maxEntries": 50
+  }
+}
+```
+
+```bash
+ccmds cache stats    # View cache info
+ccmds cache clear    # Clear cache
+ccmds find "x" --no-cache  # Skip cache
+```
 
 ---
 

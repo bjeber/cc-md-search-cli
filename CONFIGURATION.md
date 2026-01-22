@@ -99,6 +99,9 @@ The CLI looks for config files in this order:
 | `frontmatterFields` | `string[]` | See above | Frontmatter fields to include |
 | `extensions` | `string[]` | `[".md", ".markdown"]` | File extensions to search |
 | `aliases` | `object` | `{}` | Command shortcuts (planned) |
+| `cache.enabled` | `boolean` | `false` | Enable result caching |
+| `cache.ttl` | `number` | `300` | Cache expiration in seconds |
+| `cache.maxEntries` | `number` | `50` | Maximum cached queries |
 
 ---
 
@@ -248,6 +251,53 @@ ccmds config -o json
 # Show defaults (ignore config files)
 ccmds config --no-config
 ```
+
+---
+
+## Caching
+
+Cache search results to speed up repeated queries (disabled by default).
+
+### Enable Caching
+
+```json
+{
+  "cache": {
+    "enabled": true,
+    "ttl": 300,
+    "maxEntries": 50
+  }
+}
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enabled` | `false` | Enable caching |
+| `ttl` | `300` | Seconds until cache entry expires |
+| `maxEntries` | `50` | Maximum cached queries (oldest removed when exceeded) |
+
+### Cache Commands
+
+```bash
+# View cache statistics
+ccmds cache stats
+
+# Clear all cached entries
+ccmds cache clear
+```
+
+### Skip Cache for Single Command
+
+```bash
+ccmds find "query" --no-cache
+```
+
+### What Gets Cached
+
+- `find` results (fuzzy search)
+- `grep` results (pattern search)
+
+Cache is stored in `.ccmds-cache.json` in the project root.
 
 ---
 

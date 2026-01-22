@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 
 import { Command } from 'commander';
-import { readFileSync, readdirSync, statSync, realpathSync, existsSync, writeFileSync } from 'fs';
+import { readFileSync, readdirSync, statSync, realpathSync, existsSync, writeFileSync, unlinkSync, mkdirSync } from 'fs';
 import { join, relative, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir } from 'os';
+import { createHash } from 'crypto';
 import matter from 'gray-matter';
 import Fuse from 'fuse.js';
 
@@ -41,7 +42,12 @@ const DEFAULT_CONFIG = {
   },
   frontmatterFields: ['title', 'description', 'tags', 'category', 'summary', 'keywords'],
   extensions: ['.md', '.markdown'],
-  aliases: {}
+  aliases: {},
+  cache: {
+    enabled: false,
+    ttl: 300,
+    maxEntries: 50
+  }
 };
 
 /**
@@ -102,31 +108,41 @@ function loadConfigFile(configPath) {
  * @returns {object} - Merged configuration
  */
 function loadConfig(options = {}) {
+  let config;
+
   // If --no-config flag is set, return defaults
   if (options.noConfig) {
-    return { ...DEFAULT_CONFIG, _source: 'defaults' };
-  }
-
-  // If explicit config path provided
-  if (options.config) {
-    const config = loadConfigFile(options.config);
-    if (config) {
-      return mergeConfig(DEFAULT_CONFIG, config, options);
+    config = { ...DEFAULT_CONFIG, _source: 'defaults' };
+  } else if (options.config) {
+    // If explicit config path provided
+    const fileConfig = loadConfigFile(options.config);
+    if (fileConfig) {
+      config = mergeConfig(DEFAULT_CONFIG, fileConfig, options);
+    } else {
+      console.error(`Config file not found: ${options.config}`);
+      process.exit(1);
     }
-    console.error(`Config file not found: ${options.config}`);
-    process.exit(1);
-  }
-
-  // Hierarchical lookup
-  const configPath = findConfigFile();
-  if (configPath) {
-    const config = loadConfigFile(configPath);
-    if (config) {
-      return mergeConfig(DEFAULT_CONFIG, config, options);
+  } else {
+    // Hierarchical lookup
+    const configPath = findConfigFile();
+    if (configPath) {
+      const fileConfig = loadConfigFile(configPath);
+      if (fileConfig) {
+        config = mergeConfig(DEFAULT_CONFIG, fileConfig, options);
+      } else {
+        config = { ...DEFAULT_CONFIG, _source: 'defaults' };
+      }
+    } else {
+      config = { ...DEFAULT_CONFIG, _source: 'defaults' };
     }
   }
 
-  return { ...DEFAULT_CONFIG, _source: 'defaults' };
+  // Handle --no-cache flag
+  if (options.noCache) {
+    config.cache = { ...config.cache, enabled: false };
+  }
+
+  return config;
 }
 
 /**
@@ -310,6 +326,169 @@ function generateDefaultConfig(options = {}) {
   };
 
   return JSON.stringify(config);
+}
+
+// ============================================================================
+// Cache System
+// ============================================================================
+
+const CACHE_FILE = '.ccmds-cache.json';
+const CACHE_VERSION = 1;
+
+/**
+ * Generate a cache key from command and options
+ * @param {string} command - Command name
+ * @param {object} params - Parameters to include in key
+ * @returns {string} - Cache key hash
+ */
+function generateCacheKey(command, params) {
+  const keyData = JSON.stringify({ command, ...params });
+  return createHash('md5').update(keyData).digest('hex').substring(0, 12);
+}
+
+/**
+ * Get cache file path (in project root or config directory)
+ * @param {object} config - Configuration object
+ * @returns {string} - Cache file path
+ */
+function getCacheFilePath(config) {
+  const baseDir = config._configDir || process.cwd();
+  return join(baseDir, CACHE_FILE);
+}
+
+/**
+ * Read cache from file
+ * @param {string} cachePath - Path to cache file
+ * @returns {object} - Cache data or empty cache structure
+ */
+function readCache(cachePath) {
+  try {
+    if (existsSync(cachePath)) {
+      const data = JSON.parse(readFileSync(cachePath, 'utf-8'));
+      if (data.version === CACHE_VERSION) {
+        return data;
+      }
+    }
+  } catch (err) {
+    // Ignore corrupted cache
+  }
+  return { version: CACHE_VERSION, entries: {} };
+}
+
+/**
+ * Write cache to file
+ * @param {string} cachePath - Path to cache file
+ * @param {object} cache - Cache data
+ */
+function writeCache(cachePath, cache) {
+  try {
+    writeFileSync(cachePath, JSON.stringify(cache));
+  } catch (err) {
+    // Ignore write errors
+  }
+}
+
+/**
+ * Get cached result if valid
+ * @param {object} config - Configuration object
+ * @param {string} cacheKey - Cache key
+ * @returns {object|null} - Cached results or null
+ */
+function getCachedResult(config, cacheKey) {
+  if (!config.cache?.enabled) return null;
+
+  const cachePath = getCacheFilePath(config);
+  const cache = readCache(cachePath);
+  const entry = cache.entries[cacheKey];
+
+  if (!entry) return null;
+
+  // Check TTL
+  const ttl = config.cache.ttl || 300;
+  const age = (Date.now() - entry.created) / 1000;
+  if (age > ttl) {
+    // Expired - remove entry
+    delete cache.entries[cacheKey];
+    writeCache(cachePath, cache);
+    return null;
+  }
+
+  return entry.results;
+}
+
+/**
+ * Store result in cache
+ * @param {object} config - Configuration object
+ * @param {string} cacheKey - Cache key
+ * @param {string} command - Command name
+ * @param {any} results - Results to cache
+ */
+function setCachedResult(config, cacheKey, command, results) {
+  if (!config.cache?.enabled) return;
+
+  const cachePath = getCacheFilePath(config);
+  const cache = readCache(cachePath);
+
+  // Add new entry
+  cache.entries[cacheKey] = {
+    created: Date.now(),
+    command,
+    results
+  };
+
+  // Trim old entries if over limit
+  const maxEntries = config.cache.maxEntries || 50;
+  const entries = Object.entries(cache.entries);
+  if (entries.length > maxEntries) {
+    // Sort by created time, remove oldest
+    entries.sort((a, b) => a[1].created - b[1].created);
+    const toRemove = entries.slice(0, entries.length - maxEntries);
+    toRemove.forEach(([key]) => delete cache.entries[key]);
+  }
+
+  writeCache(cachePath, cache);
+}
+
+/**
+ * Clear all cache entries
+ * @param {object} config - Configuration object
+ * @returns {number} - Number of entries cleared
+ */
+function clearCache(config) {
+  const cachePath = getCacheFilePath(config);
+  if (existsSync(cachePath)) {
+    const cache = readCache(cachePath);
+    const count = Object.keys(cache.entries).length;
+    unlinkSync(cachePath);
+    return count;
+  }
+  return 0;
+}
+
+/**
+ * Get cache statistics
+ * @param {object} config - Configuration object
+ * @returns {object} - Cache stats
+ */
+function getCacheStats(config) {
+  const cachePath = getCacheFilePath(config);
+  const cache = readCache(cachePath);
+  const entries = Object.values(cache.entries);
+  const now = Date.now();
+  const ttl = (config.cache?.ttl || 300) * 1000;
+
+  return {
+    enabled: config.cache?.enabled || false,
+    path: cachePath,
+    exists: existsSync(cachePath),
+    totalEntries: entries.length,
+    validEntries: entries.filter(e => (now - e.created) < ttl).length,
+    expiredEntries: entries.filter(e => (now - e.created) >= ttl).length,
+    commands: entries.reduce((acc, e) => {
+      acc[e.command] = (acc[e.command] || 0) + 1;
+      return acc;
+    }, {})
+  };
 }
 
 // ============================================================================
@@ -762,7 +941,8 @@ program
   .description('Claude Code Markdown Search - CLI for efficient document querying')
   .version('1.0.2')
   .option('--config <path>', 'Path to config file')
-  .option('--no-config', 'Ignore config file');
+  .option('--no-config', 'Ignore config file')
+  .option('--no-cache', 'Skip cache for this command');
 
 program
   .command('grep')
@@ -786,17 +966,30 @@ program
       ...(options.exclude || [])
     ];
 
-    const files = findMarkdownFilesFromDirs(dirs, {
-      exclude: excludePatterns,
-      extensions: config.extensions
-    });
-
-    const results = grepSearch(files, query, {
-      context: parseInt(options.context),
+    // Check cache
+    const cacheKey = generateCacheKey('grep', {
+      query,
+      dirs: dirs.sort(),
       caseSensitive: options.caseSensitive,
-      raw: options.raw,
-      config
+      exclude: excludePatterns.sort()
     });
+    let results = getCachedResult(config, cacheKey);
+
+    if (!results) {
+      const files = findMarkdownFilesFromDirs(dirs, {
+        exclude: excludePatterns,
+        extensions: config.extensions
+      });
+
+      results = grepSearch(files, query, {
+        context: parseInt(options.context),
+        caseSensitive: options.caseSensitive,
+        raw: options.raw,
+        config
+      });
+
+      setCachedResult(config, cacheKey, 'grep', results);
+    }
 
     console.log(formatOutput(results, outputMode));
     console.log(`\n✓ Found ${results.length} file(s) with matches`);
@@ -824,16 +1017,29 @@ program
       ...(options.exclude || [])
     ];
 
-    const files = findMarkdownFilesFromDirs(dirs, {
-      exclude: excludePatterns,
-      extensions: config.extensions
-    });
-
-    const results = fuzzySearch(files, query, {
+    // Check cache
+    const cacheKey = generateCacheKey('find', {
+      query,
+      dirs: dirs.sort(),
       limit,
-      raw: options.raw,
-      config
+      exclude: excludePatterns.sort()
     });
+    let results = getCachedResult(config, cacheKey);
+
+    if (!results) {
+      const files = findMarkdownFilesFromDirs(dirs, {
+        exclude: excludePatterns,
+        extensions: config.extensions
+      });
+
+      results = fuzzySearch(files, query, {
+        limit,
+        raw: options.raw,
+        config
+      });
+
+      setCachedResult(config, cacheKey, 'find', results);
+    }
 
     console.log(formatOutput(results, outputMode));
     console.log(`\n✓ Found ${results.length} relevant document(s)`);
@@ -1060,6 +1266,45 @@ program
       console.log(`  Top results (1-3): ${displayConfig.preview.topResults} chars`);
       console.log(`  Mid results (4-7): ${displayConfig.preview.midResults} chars`);
       console.log(`  Other results: ${displayConfig.preview.otherResults} chars`);
+
+      console.log('\nCache:');
+      console.log(`  Enabled: ${displayConfig.cache?.enabled || false}`);
+      console.log(`  TTL: ${displayConfig.cache?.ttl || 300} seconds`);
+      console.log(`  Max entries: ${displayConfig.cache?.maxEntries || 50}`);
+    }
+  });
+
+program
+  .command('cache')
+  .description('Manage search result cache')
+  .argument('[action]', 'Action: clear, stats (default: stats)')
+  .action((action = 'stats') => {
+    const globalOpts = program.opts();
+    const config = loadConfig(globalOpts);
+
+    if (action === 'clear') {
+      const count = clearCache(config);
+      console.log(`Cleared ${count} cached entries`);
+    } else if (action === 'stats') {
+      const stats = getCacheStats(config);
+      console.log('Cache Statistics:');
+      console.log('─'.repeat(40));
+      console.log(`Enabled: ${stats.enabled}`);
+      console.log(`Cache file: ${stats.path}`);
+      console.log(`File exists: ${stats.exists}`);
+      console.log(`Total entries: ${stats.totalEntries}`);
+      console.log(`Valid entries: ${stats.validEntries}`);
+      console.log(`Expired entries: ${stats.expiredEntries}`);
+      if (Object.keys(stats.commands).length > 0) {
+        console.log('\nEntries by command:');
+        Object.entries(stats.commands).forEach(([cmd, count]) => {
+          console.log(`  ${cmd}: ${count}`);
+        });
+      }
+    } else {
+      console.error(`Unknown cache action: ${action}`);
+      console.error('Available actions: clear, stats');
+      process.exit(1);
     }
   });
 
@@ -1110,6 +1355,16 @@ export {
   mergeConfig,
   resolveDirectories,
   generateDefaultConfig,
+
+  // Cache
+  generateCacheKey,
+  getCacheFilePath,
+  readCache,
+  writeCache,
+  getCachedResult,
+  setCachedResult,
+  clearCache,
+  getCacheStats,
 
   // CLI
   program,
