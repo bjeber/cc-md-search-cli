@@ -29,7 +29,7 @@ All notable changes to this project will be documented in this file.
 - `--raw` flag to disable context optimizations when needed
 - Multi-directory search support
 - New `CONFIGURATION.md` guide for documentation path setup
-- Cursor rules file (`rules/docs-search.mdc`) for IDE integration
+- Cursor rules file (`rules/ccmds.mdc`) for IDE integration
 - Comprehensive test suite with 1900+ lines of tests
 - Test fixtures for various markdown scenarios
 

@@ -48,7 +48,7 @@ cp $(npm root -g)/cc-md-search-cli/skills/SKILL.md ~/.claude/skills/ccmds/SKILL.
 **For Cursor:**
 ```bash
 mkdir -p .cursor/rules
-cp $(npm root -g)/cc-md-search-cli/rules/docs-search.mdc .cursor/rules/
+cp $(npm root -g)/cc-md-search-cli/rules/ccmds.mdc .cursor/rules/
 ```
 
 Now when you ask your AI assistant about documentation, it will use `ccmds` automatically.
@@ -169,7 +169,7 @@ npm link
 1. Copy the rule file to your project:
    ```bash
    mkdir -p .cursor/rules
-   cp rules/docs-search.mdc .cursor/rules/
+   cp rules/ccmds.mdc .cursor/rules/
    ```
 
 2. Cursor will automatically include this rule when you ask about documentation.

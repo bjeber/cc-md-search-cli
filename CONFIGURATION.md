@@ -358,4 +358,4 @@ Benefits:
 
 - **[README.md](./README.md)** - Quick start and installation
 - **[skills/SKILL.md](./skills/SKILL.md)** - Claude Code skill reference
-- **[rules/docs-search.mdc](./rules/docs-search.mdc)** - Cursor IDE rule reference
+- **[rules/ccmds.mdc](./rules/ccmds.mdc)** - Cursor IDE rule reference
