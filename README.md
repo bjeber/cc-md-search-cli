@@ -41,8 +41,8 @@ ccmds init -d ./docs    # Creates .ccmdsrc config file
 
 **For Claude Code:**
 ```bash
-mkdir -p ~/.claude/skills/md-search
-cp $(npm root -g)/cc-md-search-cli/skills/SKILL.md ~/.claude/skills/md-search/SKILL.md
+mkdir -p ~/.claude/skills/ccmds
+cp $(npm root -g)/cc-md-search-cli/skills/SKILL.md ~/.claude/skills/ccmds/SKILL.md
 ```
 
 **For Cursor:**
@@ -158,8 +158,8 @@ npm link
 
 1. Copy the skill file to your Claude Code skills directory:
    ```bash
-   mkdir -p ~/.claude/skills/md-search
-   cp skills/SKILL.md ~/.claude/skills/md-search/SKILL.md
+   mkdir -p ~/.claude/skills/ccmds
+   cp skills/SKILL.md ~/.claude/skills/ccmds/SKILL.md
    ```
 
 2. Claude Code will automatically use `ccmds` when you ask about documentation.

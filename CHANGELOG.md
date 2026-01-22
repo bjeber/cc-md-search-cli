@@ -55,7 +55,7 @@ All notable changes to this project will be documented in this file.
 - Support for `.md` and `.mdx` file extensions
 - CLI commands: `search`, `list`, `stats`
 - Configurable search options (depth, limit, threshold)
-- Claude Code skill integration (`md-search`)
+- Claude Code skill integration (`ccmds`)
 
 [1.0.2]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.0...v1.0.1

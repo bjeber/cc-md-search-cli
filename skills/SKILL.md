@@ -1,5 +1,5 @@
 ---
-name: md-search
+name: ccmds
 description: >
   Search markdown documentation, docs, guides, references, README files, API docs,
   and technical documentation. Use when user says "check the docs", "what do the docs say",
