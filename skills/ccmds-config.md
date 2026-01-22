@@ -35,7 +35,7 @@ The CLI looks for config files in this order:
 
 ```json
 {
-  "defaultDirectories": ["./docs"],
+  "documentDirectories": ["./docs"],
   "exclude": ["**/node_modules/**", "**/.*/**"],
   "outputMode": "json",
   "limit": 10,
@@ -64,7 +64,7 @@ The CLI looks for config files in this order:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `defaultDirectories` | `string[]` | `["."]` | Directories to search |
+| `documentDirectories` | `string[]` | `["."]` | Directories to search |
 | `exclude` | `string[]` | `[]` | Glob patterns to exclude |
 | `outputMode` | `string` | `"json"` | Default output mode |
 | `limit` | `number` | `10` | Default result limit |
@@ -109,7 +109,7 @@ ccmds find "x" --no-cache  # Skip cache
 
 ```json
 {
-  "defaultDirectories": ["./docs"],
+  "documentDirectories": ["./docs"],
   "exclude": ["**/node_modules/**"]
 }
 ```
@@ -118,7 +118,7 @@ ccmds find "x" --no-cache  # Skip cache
 
 ```json
 {
-  "defaultDirectories": [
+  "documentDirectories": [
     "./docs/user-guide",
     "./docs/api-reference",
     "./docs/tutorials"
@@ -132,7 +132,7 @@ ccmds find "x" --no-cache  # Skip cache
 
 ```json
 {
-  "defaultDirectories": ["./docs", "./packages/*/docs"],
+  "documentDirectories": ["./docs", "./packages/*/docs"],
   "exclude": ["**/node_modules/**", "**/dist/**", "**/.*/**"]
 }
 ```
@@ -141,7 +141,7 @@ ccmds find "x" --no-cache  # Skip cache
 
 ```json
 {
-  "defaultDirectories": ["./docs"],
+  "documentDirectories": ["./docs"],
   "fuzzy": { "threshold": 0.2 }
 }
 ```

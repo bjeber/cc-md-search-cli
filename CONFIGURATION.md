@@ -56,7 +56,7 @@ The CLI looks for config files in this order:
 
 ```json
 {
-  "defaultDirectories": ["./docs"],
+  "documentDirectories": ["./docs"],
   "exclude": [
     "**/node_modules/**",
     "**/.*/**"
@@ -87,7 +87,7 @@ The CLI looks for config files in this order:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `defaultDirectories` | `string[]` | `["."]` | Directories to search when none specified |
+| `documentDirectories` | `string[]` | `["."]` | Directories to search when none specified |
 | `exclude` | `string[]` | `[]` | Glob patterns to always exclude |
 | `outputMode` | `string` | `"json"` | Default output mode |
 | `limit` | `number` | `10` | Default result limit for find |
@@ -111,7 +111,7 @@ The CLI looks for config files in this order:
 
 ```json
 {
-  "defaultDirectories": ["./docs"],
+  "documentDirectories": ["./docs"],
   "exclude": ["**/node_modules/**"]
 }
 ```
@@ -120,7 +120,7 @@ The CLI looks for config files in this order:
 
 ```json
 {
-  "defaultDirectories": [
+  "documentDirectories": [
     "./docs/user-guide",
     "./docs/api-reference",
     "./docs/tutorials"
@@ -139,7 +139,7 @@ The CLI looks for config files in this order:
 
 ```json
 {
-  "defaultDirectories": [
+  "documentDirectories": [
     "./docs",
     "./packages/*/docs"
   ],
@@ -155,7 +155,7 @@ The CLI looks for config files in this order:
 
 ```json
 {
-  "defaultDirectories": ["./docs"],
+  "documentDirectories": ["./docs"],
   "fuzzy": {
     "threshold": 0.2
   }
@@ -166,7 +166,7 @@ The CLI looks for config files in this order:
 
 ```json
 {
-  "defaultDirectories": ["./docs"],
+  "documentDirectories": ["./docs"],
   "extensions": [".md", ".markdown", ".mdx"]
 }
 ```

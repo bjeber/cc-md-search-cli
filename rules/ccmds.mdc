@@ -43,7 +43,7 @@ ccmds init -d ./docs ./api/docs
 
 ```json
 {
-  "defaultDirectories": ["./docs", "./api/docs"],
+  "documentDirectories": ["./docs", "./api/docs"],
   "exclude": ["**/node_modules/**", "**/.*/**"],
   "outputMode": "json",
   "limit": 10

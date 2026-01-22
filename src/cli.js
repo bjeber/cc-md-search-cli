@@ -22,7 +22,7 @@ const CONFIG_FILE_NAMES = [
 ];
 
 const DEFAULT_CONFIG = {
-  defaultDirectories: ['.'],
+  documentDirectories: ['.'],
   exclude: [],
   outputMode: 'json',
   limit: 10,
@@ -191,7 +191,7 @@ function resolveDirectories(directories, config) {
 
   // Use config defaults, resolving relative paths from config file location
   const configDir = config._configDir || process.cwd();
-  return config.defaultDirectories.map(dir => {
+  return config.documentDirectories.map(dir => {
     if (dir.startsWith('/') || dir.startsWith('~')) {
       return dir.replace(/^~/, homedir());
     }
@@ -311,7 +311,7 @@ function matchSegment(segment, pattern) {
  */
 function generateDefaultConfig(options = {}) {
   const config = {
-    defaultDirectories: options.directories || ['./docs'],
+    documentDirectories: options.directories || ['./docs'],
     exclude: [
       '**/node_modules/**',
       '**/.*/**'
@@ -1242,7 +1242,7 @@ program
         console.log('Source: defaults (no config file)');
       }
 
-      console.log('\nDirectories:', displayConfig.defaultDirectories.join(', '));
+      console.log('\nDirectories:', displayConfig.documentDirectories.join(', '));
       console.log('Output mode:', displayConfig.outputMode);
       console.log('Result limit:', displayConfig.limit);
       console.log('Extensions:', displayConfig.extensions.join(', '));

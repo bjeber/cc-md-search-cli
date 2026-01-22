@@ -118,7 +118,7 @@ Example configuration:
 
 ```json
 {
-  "defaultDirectories": ["./docs"],
+  "documentDirectories": ["./docs"],
   "exclude": ["**/node_modules/**", "**/.*/**"],
   "outputMode": "json",
   "limit": 10

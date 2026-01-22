@@ -1948,7 +1948,7 @@ describe('Configuration System', () => {
 
   describe('DEFAULT_CONFIG', () => {
     test('has all required fields', () => {
-      expect(DEFAULT_CONFIG).toHaveProperty('defaultDirectories');
+      expect(DEFAULT_CONFIG).toHaveProperty('documentDirectories');
       expect(DEFAULT_CONFIG).toHaveProperty('exclude');
       expect(DEFAULT_CONFIG).toHaveProperty('outputMode');
       expect(DEFAULT_CONFIG).toHaveProperty('limit');
@@ -1960,7 +1960,7 @@ describe('Configuration System', () => {
     });
 
     test('has correct default values', () => {
-      expect(DEFAULT_CONFIG.defaultDirectories).toEqual(['.']);
+      expect(DEFAULT_CONFIG.documentDirectories).toEqual(['.']);
       expect(DEFAULT_CONFIG.outputMode).toBe('json');
       expect(DEFAULT_CONFIG.limit).toBe(10);
       expect(DEFAULT_CONFIG.extensions).toContain('.md');
@@ -2030,13 +2030,13 @@ describe('Configuration System', () => {
     test('loads valid JSON config file', () => {
       const configPath = join(CONFIG_TEST_DIR, 'valid-config.json');
       const configContent = JSON.stringify({
-        defaultDirectories: ['./docs'],
+        documentDirectories: ['./docs'],
         limit: 20
       });
       writeFileSync(configPath, configContent);
 
       const config = loadConfigFile(configPath);
-      expect(config.defaultDirectories).toEqual(['./docs']);
+      expect(config.documentDirectories).toEqual(['./docs']);
       expect(config.limit).toBe(20);
       expect(config._configDir).toBe(CONFIG_TEST_DIR);
       expect(config._configPath).toBe(configPath);
@@ -2066,7 +2066,7 @@ describe('Configuration System', () => {
       const merged = mergeConfig(DEFAULT_CONFIG, fileConfig);
       expect(merged.limit).toBe(25);
       expect(merged.outputMode).toBe('detailed');
-      expect(merged.defaultDirectories).toEqual(DEFAULT_CONFIG.defaultDirectories);
+      expect(merged.documentDirectories).toEqual(DEFAULT_CONFIG.documentDirectories);
     });
 
     test('deep merges nested objects', () => {
@@ -2119,19 +2119,19 @@ describe('Configuration System', () => {
 
   describe('resolveDirectories', () => {
     test('returns CLI directories if provided', () => {
-      const config = { defaultDirectories: ['./docs'], _configDir: '/project' };
+      const config = { documentDirectories: ['./docs'], _configDir: '/project' };
       const dirs = resolveDirectories(['./src', './lib'], config);
       expect(dirs).toEqual(['./src', './lib']);
     });
 
     test('returns config defaults if no CLI directories', () => {
-      const config = { defaultDirectories: ['./docs'], _configDir: '/project' };
+      const config = { documentDirectories: ['./docs'], _configDir: '/project' };
       const dirs = resolveDirectories([], config);
       expect(dirs).toEqual(['/project/docs']);
     });
 
     test('handles empty CLI directories array', () => {
-      const config = { defaultDirectories: ['.'], _configDir: '/project' };
+      const config = { documentDirectories: ['.'], _configDir: '/project' };
       const dirs = resolveDirectories([], config);
       expect(dirs).toEqual(['/project']);
     });
@@ -2152,13 +2152,13 @@ describe('Configuration System', () => {
     test('uses provided directories', () => {
       const content = generateDefaultConfig({ directories: ['./wiki', './docs'] });
       const config = JSON.parse(content);
-      expect(config.defaultDirectories).toEqual(['./wiki', './docs']);
+      expect(config.documentDirectories).toEqual(['./wiki', './docs']);
     });
 
     test('uses default directory if not provided', () => {
       const content = generateDefaultConfig();
       const config = JSON.parse(content);
-      expect(config.defaultDirectories).toEqual(['./docs']);
+      expect(config.documentDirectories).toEqual(['./docs']);
     });
   });
 
@@ -2320,7 +2320,7 @@ describe('CLI Configuration Commands', () => {
 
         const configPath = join(testDir, '.ccmdsrc');
         const config = JSON.parse(readFileSync(configPath, 'utf-8'));
-        expect(config.defaultDirectories).toEqual(['./wiki', './docs']);
+        expect(config.documentDirectories).toEqual(['./wiki', './docs']);
 
         rmSync(testDir, { recursive: true });
       });
