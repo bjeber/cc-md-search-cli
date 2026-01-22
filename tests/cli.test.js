@@ -1,9 +1,10 @@
 import { describe, test, expect, beforeAll, afterAll, beforeEach, spyOn, mock } from 'bun:test';
 import { join, resolve } from 'path';
-import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'fs';
 import {
   findMarkdownFiles,
   findMarkdownFilesFromDirs,
+  shouldExclude,
   parseMarkdownFile,
   extractHeadings,
   findParentHeading,
@@ -15,12 +16,35 @@ import {
   fuzzySearch,
   formatOutput,
   program,
-  USEFUL_FRONTMATTER
+  USEFUL_FRONTMATTER,
+  // Configuration exports
+  DEFAULT_CONFIG,
+  CONFIG_FILE_NAMES,
+  findConfigFile,
+  loadConfigFile,
+  loadConfig,
+  mergeConfig,
+  resolveDirectories,
+  generateDefaultConfig
 } from '../src/cli.js';
 
 const FIXTURES_DIR = resolve(import.meta.dir, 'fixtures');
 const SECOND_DOCS_DIR = resolve(import.meta.dir, 'fixtures/second-docs');
 const NESTED_DIR = resolve(import.meta.dir, 'fixtures/nested');
+const CLI_PATH = resolve(import.meta.dir, '../src/cli.js');
+
+// Helper to run CLI command with a specific runtime
+const runCli = (runtime, args, options = {}) => {
+  const result = Bun.spawnSync([runtime, CLI_PATH, ...args], {
+    cwd: options.cwd || import.meta.dir,
+    env: process.env,
+  });
+  return {
+    stdout: result.stdout.toString().trim(),
+    stderr: result.stderr.toString().trim(),
+    exitCode: result.exitCode,
+  };
+};
 
 // ============================================================================
 // FILE OPERATIONS
@@ -1639,21 +1663,7 @@ describe('Integration Tests', () => {
 // ============================================================================
 
 describe('Cross-Runtime Tests', () => {
-  const CLI_PATH = resolve(import.meta.dir, '../src/cli.js');
   const RUNTIMES = ['bun', 'node'];
-
-  // Helper to run CLI command with a specific runtime
-  const runCli = (runtime, args) => {
-    const result = Bun.spawnSync([runtime, CLI_PATH, ...args], {
-      cwd: import.meta.dir,
-      env: process.env,
-    });
-    return {
-      stdout: result.stdout.toString().trim(),
-      stderr: result.stderr.toString().trim(),
-      exitCode: result.exitCode,
-    };
-  };
 
   describe.each(RUNTIMES)('%s runtime', (runtime) => {
     test('--version returns version', () => {
@@ -1905,4 +1915,489 @@ describe('Cross-Runtime Tests', () => {
       expect(bunFileSet).toEqual(nodeFileSet);
     });
   });
+});
+
+// ============================================================================
+// CONFIGURATION SYSTEM
+// ============================================================================
+
+describe('Configuration System', () => {
+  const CONFIG_TEST_DIR = resolve(import.meta.dir, 'config-test-temp');
+
+  beforeAll(() => {
+    if (!existsSync(CONFIG_TEST_DIR)) {
+      mkdirSync(CONFIG_TEST_DIR, { recursive: true });
+    }
+  });
+
+  afterAll(() => {
+    if (existsSync(CONFIG_TEST_DIR)) {
+      rmSync(CONFIG_TEST_DIR, { recursive: true });
+    }
+  });
+
+  describe('DEFAULT_CONFIG', () => {
+    test('has all required fields', () => {
+      expect(DEFAULT_CONFIG).toHaveProperty('defaultDirectories');
+      expect(DEFAULT_CONFIG).toHaveProperty('exclude');
+      expect(DEFAULT_CONFIG).toHaveProperty('outputMode');
+      expect(DEFAULT_CONFIG).toHaveProperty('limit');
+      expect(DEFAULT_CONFIG).toHaveProperty('fuzzy');
+      expect(DEFAULT_CONFIG).toHaveProperty('preview');
+      expect(DEFAULT_CONFIG).toHaveProperty('frontmatterFields');
+      expect(DEFAULT_CONFIG).toHaveProperty('extensions');
+      expect(DEFAULT_CONFIG).toHaveProperty('aliases');
+    });
+
+    test('has correct default values', () => {
+      expect(DEFAULT_CONFIG.defaultDirectories).toEqual(['.']);
+      expect(DEFAULT_CONFIG.outputMode).toBe('compact');
+      expect(DEFAULT_CONFIG.limit).toBe(10);
+      expect(DEFAULT_CONFIG.extensions).toContain('.md');
+      expect(DEFAULT_CONFIG.extensions).toContain('.markdown');
+    });
+
+    test('fuzzy config has threshold and weights', () => {
+      expect(DEFAULT_CONFIG.fuzzy.threshold).toBe(0.4);
+      expect(DEFAULT_CONFIG.fuzzy.weights).toHaveProperty('title');
+      expect(DEFAULT_CONFIG.fuzzy.weights).toHaveProperty('description');
+      expect(DEFAULT_CONFIG.fuzzy.weights).toHaveProperty('body');
+      expect(DEFAULT_CONFIG.fuzzy.weights).toHaveProperty('tags');
+    });
+
+    test('preview config has all length settings', () => {
+      expect(DEFAULT_CONFIG.preview.topResults).toBe(600);
+      expect(DEFAULT_CONFIG.preview.midResults).toBe(300);
+      expect(DEFAULT_CONFIG.preview.otherResults).toBe(150);
+    });
+  });
+
+  describe('CONFIG_FILE_NAMES', () => {
+    test('contains expected config file names', () => {
+      expect(CONFIG_FILE_NAMES).toContain('.ccmdsrc');
+      expect(CONFIG_FILE_NAMES).toContain('.ccmdsrc.json');
+      expect(CONFIG_FILE_NAMES).toContain('ccmds.config.json');
+    });
+  });
+
+  describe('shouldExclude', () => {
+    test('returns false for empty patterns', () => {
+      expect(shouldExclude('some/path.md', [])).toBe(false);
+      expect(shouldExclude('some/path.md', null)).toBe(false);
+      expect(shouldExclude('some/path.md', undefined)).toBe(false);
+    });
+
+    test('matches simple glob patterns', () => {
+      expect(shouldExclude('node_modules/file.md', ['node_modules/*'])).toBe(true);
+      expect(shouldExclude('src/file.md', ['node_modules/*'])).toBe(false);
+    });
+
+    test('matches double-star glob patterns', () => {
+      expect(shouldExclude('deep/nested/node_modules/file.md', ['**/node_modules/**'])).toBe(true);
+      expect(shouldExclude('node_modules/deep/file.md', ['**/node_modules/**'])).toBe(true);
+      expect(shouldExclude('src/file.md', ['**/node_modules/**'])).toBe(false);
+    });
+
+    test('matches file extension patterns', () => {
+      expect(shouldExclude('docs/draft.md', ['**/*.draft.md'])).toBe(false);
+      expect(shouldExclude('docs/file.draft.md', ['**/*.draft.md'])).toBe(true);
+    });
+
+    test('matches directory patterns', () => {
+      expect(shouldExclude('.git/config', ['.*/**'])).toBe(true);
+      expect(shouldExclude('.hidden/file.md', ['.*/**'])).toBe(true);
+      // Pattern .*/** matches paths starting with dot, not 'visible'
+      expect(shouldExclude('visible/file.md', ['.*/**'])).toBe(false);
+    });
+
+    test('matches specific directory names', () => {
+      expect(shouldExclude('.hidden/file.md', ['.hidden/**'])).toBe(true);
+      expect(shouldExclude('visible/file.md', ['.hidden/**'])).toBe(false);
+    });
+  });
+
+  describe('loadConfigFile', () => {
+    test('loads valid JSON config file', () => {
+      const configPath = join(CONFIG_TEST_DIR, 'valid-config.json');
+      const configContent = JSON.stringify({
+        defaultDirectories: ['./docs'],
+        limit: 20
+      });
+      writeFileSync(configPath, configContent);
+
+      const config = loadConfigFile(configPath);
+      expect(config.defaultDirectories).toEqual(['./docs']);
+      expect(config.limit).toBe(20);
+      expect(config._configDir).toBe(CONFIG_TEST_DIR);
+      expect(config._configPath).toBe(configPath);
+
+      rmSync(configPath);
+    });
+
+    test('returns null for invalid JSON', () => {
+      const configPath = join(CONFIG_TEST_DIR, 'invalid-config.json');
+      writeFileSync(configPath, 'not valid json {{{');
+
+      const config = loadConfigFile(configPath);
+      expect(config).toBeNull();
+
+      rmSync(configPath);
+    });
+  });
+
+  describe('mergeConfig', () => {
+    test('merges file config with defaults', () => {
+      const fileConfig = {
+        limit: 25,
+        outputMode: 'detailed',
+        _configPath: '/test/path'
+      };
+
+      const merged = mergeConfig(DEFAULT_CONFIG, fileConfig);
+      expect(merged.limit).toBe(25);
+      expect(merged.outputMode).toBe('detailed');
+      expect(merged.defaultDirectories).toEqual(DEFAULT_CONFIG.defaultDirectories);
+    });
+
+    test('deep merges nested objects', () => {
+      const fileConfig = {
+        fuzzy: {
+          threshold: 0.6
+        }
+      };
+
+      const merged = mergeConfig(DEFAULT_CONFIG, fileConfig);
+      expect(merged.fuzzy.threshold).toBe(0.6);
+      // Should preserve other fuzzy settings from defaults
+      expect(merged.fuzzy.weights).toBeDefined();
+    });
+
+    test('CLI options override file config', () => {
+      const fileConfig = {
+        outputMode: 'detailed',
+        limit: 25
+      };
+      const cliOptions = {
+        output: 'json',
+        limit: '5'
+      };
+
+      const merged = mergeConfig(DEFAULT_CONFIG, fileConfig, cliOptions);
+      expect(merged.outputMode).toBe('json');
+      expect(merged.limit).toBe(5);
+    });
+  });
+
+  describe('loadConfig', () => {
+    test('returns defaults with --no-config flag', () => {
+      const config = loadConfig({ noConfig: true });
+      expect(config._source).toBe('defaults');
+      expect(config.limit).toBe(DEFAULT_CONFIG.limit);
+    });
+
+    test('returns defaults when no config file exists', () => {
+      // Run from a directory without config
+      const originalCwd = process.cwd();
+      process.chdir(CONFIG_TEST_DIR);
+
+      const config = loadConfig({});
+      expect(config._source).toBe('defaults');
+
+      process.chdir(originalCwd);
+    });
+  });
+
+  describe('resolveDirectories', () => {
+    test('returns CLI directories if provided', () => {
+      const config = { defaultDirectories: ['./docs'], _configDir: '/project' };
+      const dirs = resolveDirectories(['./src', './lib'], config);
+      expect(dirs).toEqual(['./src', './lib']);
+    });
+
+    test('returns config defaults if no CLI directories', () => {
+      const config = { defaultDirectories: ['./docs'], _configDir: '/project' };
+      const dirs = resolveDirectories([], config);
+      expect(dirs).toEqual(['/project/docs']);
+    });
+
+    test('handles empty CLI directories array', () => {
+      const config = { defaultDirectories: ['.'], _configDir: '/project' };
+      const dirs = resolveDirectories([], config);
+      expect(dirs).toEqual(['/project']);
+    });
+  });
+
+  describe('generateDefaultConfig', () => {
+    test('generates valid JSON', () => {
+      const content = generateDefaultConfig();
+      expect(() => JSON.parse(content)).not.toThrow();
+    });
+
+    test('includes default exclude patterns', () => {
+      const content = generateDefaultConfig();
+      const config = JSON.parse(content);
+      expect(config.exclude).toContain('**/node_modules/**');
+    });
+
+    test('uses provided directories', () => {
+      const content = generateDefaultConfig({ directories: ['./wiki', './docs'] });
+      const config = JSON.parse(content);
+      expect(config.defaultDirectories).toEqual(['./wiki', './docs']);
+    });
+
+    test('uses default directory if not provided', () => {
+      const content = generateDefaultConfig();
+      const config = JSON.parse(content);
+      expect(config.defaultDirectories).toEqual(['./docs']);
+    });
+  });
+
+  describe('findMarkdownFiles with exclude patterns', () => {
+    const EXCLUDE_TEST_DIR = join(CONFIG_TEST_DIR, 'exclude-test');
+
+    beforeAll(() => {
+      // Create test structure
+      mkdirSync(join(EXCLUDE_TEST_DIR, 'docs'), { recursive: true });
+      mkdirSync(join(EXCLUDE_TEST_DIR, 'node_modules'), { recursive: true });
+      mkdirSync(join(EXCLUDE_TEST_DIR, '.hidden'), { recursive: true });
+
+      writeFileSync(join(EXCLUDE_TEST_DIR, 'docs', 'readme.md'), '# Docs');
+      writeFileSync(join(EXCLUDE_TEST_DIR, 'node_modules', 'package.md'), '# Package');
+      writeFileSync(join(EXCLUDE_TEST_DIR, '.hidden', 'secret.md'), '# Secret');
+      writeFileSync(join(EXCLUDE_TEST_DIR, 'root.md'), '# Root');
+    });
+
+    afterAll(() => {
+      rmSync(EXCLUDE_TEST_DIR, { recursive: true });
+    });
+
+    test('finds all files without exclude patterns', () => {
+      const files = findMarkdownFiles(EXCLUDE_TEST_DIR, EXCLUDE_TEST_DIR, {});
+      expect(files.length).toBe(4);
+    });
+
+    test('excludes node_modules with pattern', () => {
+      const files = findMarkdownFiles(EXCLUDE_TEST_DIR, EXCLUDE_TEST_DIR, {
+        exclude: ['**/node_modules/**']
+      });
+      expect(files.length).toBe(3);
+      expect(files.some(f => f.relativePath.includes('node_modules'))).toBe(false);
+    });
+
+    test('excludes hidden directories with pattern', () => {
+      const files = findMarkdownFiles(EXCLUDE_TEST_DIR, EXCLUDE_TEST_DIR, {
+        exclude: ['.*/**']
+      });
+      expect(files.length).toBe(3);
+      expect(files.some(f => f.relativePath.includes('.hidden'))).toBe(false);
+    });
+
+    test('applies multiple exclude patterns', () => {
+      const files = findMarkdownFiles(EXCLUDE_TEST_DIR, EXCLUDE_TEST_DIR, {
+        exclude: ['**/node_modules/**', '.*/**']
+      });
+      expect(files.length).toBe(2);
+      expect(files.some(f => f.relativePath.includes('node_modules'))).toBe(false);
+      expect(files.some(f => f.relativePath.includes('.hidden'))).toBe(false);
+    });
+  });
+
+  describe('findMarkdownFiles with custom extensions', () => {
+    const EXT_TEST_DIR = join(CONFIG_TEST_DIR, 'ext-test');
+
+    beforeAll(() => {
+      mkdirSync(EXT_TEST_DIR, { recursive: true });
+      writeFileSync(join(EXT_TEST_DIR, 'file.md'), '# MD');
+      writeFileSync(join(EXT_TEST_DIR, 'file.markdown'), '# Markdown');
+      writeFileSync(join(EXT_TEST_DIR, 'file.mdx'), '# MDX');
+      writeFileSync(join(EXT_TEST_DIR, 'file.txt'), '# TXT');
+    });
+
+    afterAll(() => {
+      rmSync(EXT_TEST_DIR, { recursive: true });
+    });
+
+    test('finds only .md and .markdown by default', () => {
+      const files = findMarkdownFiles(EXT_TEST_DIR, EXT_TEST_DIR, {});
+      expect(files.length).toBe(2);
+    });
+
+    test('finds custom extensions when specified', () => {
+      const files = findMarkdownFiles(EXT_TEST_DIR, EXT_TEST_DIR, {
+        extensions: ['.md', '.markdown', '.mdx']
+      });
+      expect(files.length).toBe(3);
+      expect(files.some(f => f.relativePath.endsWith('.mdx'))).toBe(true);
+    });
+
+    test('can search only specific extension', () => {
+      const files = findMarkdownFiles(EXT_TEST_DIR, EXT_TEST_DIR, {
+        extensions: ['.mdx']
+      });
+      expect(files.length).toBe(1);
+      expect(files[0].relativePath).toBe('file.mdx');
+    });
+  });
+});
+
+// ============================================================================
+// CLI CONFIGURATION COMMANDS
+// ============================================================================
+
+describe('CLI Configuration Commands', () => {
+  const CONFIG_CLI_DIR = resolve(import.meta.dir, 'config-cli-temp');
+
+  beforeAll(() => {
+    if (!existsSync(CONFIG_CLI_DIR)) {
+      mkdirSync(CONFIG_CLI_DIR, { recursive: true });
+    }
+  });
+
+  afterAll(() => {
+    if (existsSync(CONFIG_CLI_DIR)) {
+      rmSync(CONFIG_CLI_DIR, { recursive: true });
+    }
+  });
+
+  for (const runtime of ['bun', 'node']) {
+    describe(`init command (${runtime})`, () => {
+      test('creates config file in current directory', () => {
+        const testDir = join(CONFIG_CLI_DIR, `init-test-${runtime}`);
+        mkdirSync(testDir, { recursive: true });
+
+        const { stdout, exitCode } = runCli(runtime, ['init'], { cwd: testDir });
+
+        expect(exitCode).toBe(0);
+        expect(stdout).toContain('Created config file');
+        expect(existsSync(join(testDir, '.ccmdsrc'))).toBe(true);
+
+        rmSync(testDir, { recursive: true });
+      });
+
+      test('fails if config file already exists', () => {
+        const testDir = join(CONFIG_CLI_DIR, `init-exists-${runtime}`);
+        mkdirSync(testDir, { recursive: true });
+        writeFileSync(join(testDir, '.ccmdsrc'), '{}');
+
+        const { stderr, exitCode } = runCli(runtime, ['init'], { cwd: testDir });
+
+        expect(exitCode).toBe(1);
+        expect(stderr).toContain('already exists');
+
+        rmSync(testDir, { recursive: true });
+      });
+
+      test('overwrites with --force flag', () => {
+        const testDir = join(CONFIG_CLI_DIR, `init-force-${runtime}`);
+        mkdirSync(testDir, { recursive: true });
+        writeFileSync(join(testDir, '.ccmdsrc'), '{"old": true}');
+
+        const { stdout, exitCode } = runCli(runtime, ['init', '--force'], { cwd: testDir });
+
+        expect(exitCode).toBe(0);
+        expect(stdout).toContain('Created config file');
+
+        rmSync(testDir, { recursive: true });
+      });
+
+      test('uses custom directories when provided', () => {
+        const testDir = join(CONFIG_CLI_DIR, `init-dirs-${runtime}`);
+        mkdirSync(testDir, { recursive: true });
+
+        const { exitCode } = runCli(runtime, ['init', '-d', './wiki', './docs'], { cwd: testDir });
+
+        expect(exitCode).toBe(0);
+
+        const configPath = join(testDir, '.ccmdsrc');
+        const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+        expect(config.defaultDirectories).toEqual(['./wiki', './docs']);
+
+        rmSync(testDir, { recursive: true });
+      });
+    });
+
+    describe(`config command (${runtime})`, () => {
+      test('shows default config when no config file', () => {
+        const testDir = join(CONFIG_CLI_DIR, `config-default-${runtime}`);
+        mkdirSync(testDir, { recursive: true });
+
+        const { stdout, exitCode } = runCli(runtime, ['config', '--no-config'], { cwd: testDir });
+
+        expect(exitCode).toBe(0);
+        expect(stdout).toContain('defaults');
+        expect(stdout).toContain('compact');
+
+        rmSync(testDir, { recursive: true });
+      });
+
+      test('shows config file path with --path flag', () => {
+        const testDir = join(CONFIG_CLI_DIR, `config-path-${runtime}`);
+        mkdirSync(testDir, { recursive: true });
+        writeFileSync(join(testDir, '.ccmdsrc'), '{"limit": 15}');
+
+        const { stdout, exitCode } = runCli(runtime, ['config', '--path'], { cwd: testDir });
+
+        expect(exitCode).toBe(0);
+        expect(stdout).toContain('.ccmdsrc');
+
+        rmSync(testDir, { recursive: true });
+      });
+
+      test('outputs JSON with --output json', () => {
+        const testDir = join(CONFIG_CLI_DIR, `config-json-${runtime}`);
+        mkdirSync(testDir, { recursive: true });
+
+        const { stdout, exitCode } = runCli(runtime, ['config', '--no-config', '-o', 'json'], { cwd: testDir });
+
+        expect(exitCode).toBe(0);
+        expect(() => JSON.parse(stdout)).not.toThrow();
+
+        const config = JSON.parse(stdout);
+        expect(config.limit).toBe(10);
+        expect(config.outputMode).toBe('compact');
+
+        rmSync(testDir, { recursive: true });
+      });
+    });
+
+    describe(`exclude patterns via CLI (${runtime})`, () => {
+      const EXCLUDE_CLI_DIR = join(CONFIG_CLI_DIR, `exclude-cli-${runtime}`);
+
+      beforeAll(() => {
+        mkdirSync(join(EXCLUDE_CLI_DIR, 'docs'), { recursive: true });
+        mkdirSync(join(EXCLUDE_CLI_DIR, 'archive'), { recursive: true });
+
+        writeFileSync(join(EXCLUDE_CLI_DIR, 'docs', 'readme.md'), '# Docs');
+        writeFileSync(join(EXCLUDE_CLI_DIR, 'archive', 'old.md'), '# Old');
+        writeFileSync(join(EXCLUDE_CLI_DIR, 'main.md'), '# Main');
+      });
+
+      afterAll(() => {
+        rmSync(EXCLUDE_CLI_DIR, { recursive: true });
+      });
+
+      test('list command respects --exclude flag', () => {
+        const { stdout, exitCode } = runCli(runtime, ['list', EXCLUDE_CLI_DIR, '-e', '**/archive/**', '--no-config']);
+
+        expect(exitCode).toBe(0);
+        expect(stdout).toContain('readme.md');
+        expect(stdout).toContain('main.md');
+        expect(stdout).not.toContain('old.md');
+      });
+
+      test('find command respects --exclude flag', () => {
+        const { stdout, exitCode } = runCli(runtime, ['find', 'docs', EXCLUDE_CLI_DIR, '-e', '**/archive/**', '-o', 'files', '--no-config']);
+
+        expect(exitCode).toBe(0);
+        expect(stdout).not.toContain('archive');
+      });
+
+      test('grep command respects --exclude flag', () => {
+        const { stdout, exitCode } = runCli(runtime, ['grep', '#', EXCLUDE_CLI_DIR, '-e', '**/archive/**', '-o', 'files', '--no-config']);
+
+        expect(exitCode).toBe(0);
+        expect(stdout).not.toContain('old.md');
+      });
+    });
+  }
 });

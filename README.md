@@ -17,6 +17,8 @@ Fast, context-efficient markdown documentation search tool designed for [Claude 
 - **Frontmatter Aware** - Parses YAML metadata for better search
 - **Adaptive Previews** - Top results get longer previews automatically
 - **Multiple Output Modes** - compact, detailed, files, json
+- **Project Configuration** - `.ccmdsrc` config file for project-specific settings
+- **Exclude Patterns** - Skip directories like `node_modules`, `.git`, etc.
 - **Claude Code Skill** - Pre-built skill template for Claude Code integration
 - **Cursor Rule** - Pre-built rule template for Cursor IDE integration
 - **Context Efficient** - Minimize token usage when searching docs
@@ -128,6 +130,7 @@ ccmds find "deploy" ./docs --raw                    # Disable optimizations
 - `-l, --limit <number>` - Maximum results (default: 10)
 - `-o, --output <mode>` - Output format: compact, detailed, files, json
 - `-r, --raw` - Disable adaptive previews and frontmatter filtering
+- `-e, --exclude <patterns...>` - Glob patterns to exclude
 
 ### `ccmds grep <pattern> [directories...]` - Pattern Search
 
@@ -144,6 +147,7 @@ ccmds grep "TODO" ./docs --raw -c 3  # Line-based context instead
 - `-s, --case-sensitive` - Case sensitive search
 - `-o, --output <mode>` - Output format
 - `-r, --raw` - Disable smart context (use line-based context)
+- `-e, --exclude <patterns...>` - Glob patterns to exclude
 
 ### `ccmds list [directories...]` - List Files
 
@@ -152,10 +156,12 @@ List all markdown files in one or more directories.
 ```bash
 ccmds list ./docs
 ccmds list ./docs --count
+ccmds list ./docs -e "**/archive/**"
 ```
 
 **Options:**
 - `-c, --count` - Show only file count
+- `-e, --exclude <patterns...>` - Glob patterns to exclude
 
 ### `ccmds show <file>` - Display File
 
@@ -199,6 +205,66 @@ ccmds section ./docs/api.md "Endpoints" -o json
 
 **Options:**
 - `-o, --output <mode>` - Output format: text, json
+
+### `ccmds init` - Create Configuration File
+
+Create a `.ccmdsrc` configuration file in the current directory.
+
+```bash
+ccmds init                          # Create default config
+ccmds init -d ./docs ./wiki         # Specify default directories
+ccmds init --force                  # Overwrite existing config
+```
+
+**Options:**
+- `-d, --directories <dirs...>` - Default directories to search
+- `-f, --force` - Overwrite existing config file
+
+### `ccmds config` - Show Configuration
+
+Display the current effective configuration.
+
+```bash
+ccmds config                        # Show current config
+ccmds config --path                 # Show config file path only
+ccmds config -o json                # JSON output
+ccmds config --no-config            # Show defaults only
+```
+
+**Options:**
+- `-p, --path` - Show only config file path
+- `-o, --output <mode>` - Output format: text, json
+
+## Global Options
+
+These options apply to all commands:
+
+- `--config <path>` - Use a specific config file
+- `--no-config` - Ignore config files (use defaults)
+
+```bash
+ccmds find "query" --config ./custom-config.json
+ccmds list ./docs --no-config
+```
+
+## Exclude Patterns
+
+All search commands support excluding directories and files using glob patterns:
+
+```bash
+ccmds list ./docs -e "**/node_modules/**"
+ccmds find "api" ./docs -e "**/archive/**" -e "**/*.draft.md"
+ccmds grep "TODO" ./docs -e "**/vendor/**"
+```
+
+**Options (available on find, grep, list, outline):**
+- `-e, --exclude <patterns...>` - Glob patterns to exclude
+
+Common exclude patterns:
+- `**/node_modules/**` - Skip node_modules directories
+- `**/.*/**` - Skip hidden directories
+- `**/*.draft.md` - Skip draft files
+- `**/archive/**` - Skip archive directories
 
 ## Claude Code Integration
 
@@ -374,6 +440,51 @@ category: api
 ```
 
 ## Configuration
+
+### Project Configuration File (`.ccmdsrc`)
+
+Create a `.ccmdsrc` file in your project root to set default options:
+
+```bash
+ccmds init
+```
+
+This creates a configuration file like:
+
+```json
+{
+  "defaultDirectories": ["./docs"],
+  "exclude": [
+    "**/node_modules/**",
+    "**/.*/**"
+  ],
+  "outputMode": "compact",
+  "limit": 10,
+  "fuzzy": {
+    "threshold": 0.4
+  },
+  "extensions": [".md", ".markdown"],
+  "aliases": {}
+}
+```
+
+**Configuration options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `defaultDirectories` | `string[]` | Directories to search when none specified |
+| `exclude` | `string[]` | Glob patterns to always exclude |
+| `outputMode` | `string` | Default output mode (compact, detailed, files, json) |
+| `limit` | `number` | Default result limit for find command |
+| `fuzzy.threshold` | `number` | Fuzzy search threshold (0.0-1.0, lower = stricter) |
+| `extensions` | `string[]` | File extensions to search |
+| `aliases` | `object` | Command shortcuts (planned feature) |
+
+**Config file lookup order:**
+1. Current directory (`.ccmdsrc`, `.ccmdsrc.json`, `ccmds.config.json`)
+2. Parent directories (up to root)
+3. Home directory (`~/.ccmdsrc`)
+4. Built-in defaults
 
 See [CONFIGURATION.md](./CONFIGURATION.md) for detailed configuration options.
 
