@@ -23,7 +23,7 @@ const CONFIG_FILE_NAMES = [
 const DEFAULT_CONFIG = {
   defaultDirectories: ['.'],
   exclude: [],
-  outputMode: 'compact',
+  outputMode: 'json',
   limit: 10,
   fuzzy: {
     threshold: 0.4,
@@ -300,7 +300,7 @@ function generateDefaultConfig(options = {}) {
       '**/node_modules/**',
       '**/.*/**'
     ],
-    outputMode: 'compact',
+    outputMode: 'json',
     limit: 10,
     fuzzy: {
       threshold: 0.4

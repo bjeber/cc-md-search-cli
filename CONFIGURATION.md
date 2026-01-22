@@ -61,7 +61,7 @@ The CLI looks for config files in this order:
     "**/node_modules/**",
     "**/.*/**"
   ],
-  "outputMode": "compact",
+  "outputMode": "json",
   "limit": 10,
   "fuzzy": {
     "threshold": 0.4,
@@ -89,7 +89,7 @@ The CLI looks for config files in this order:
 |--------|------|---------|-------------|
 | `defaultDirectories` | `string[]` | `["."]` | Directories to search when none specified |
 | `exclude` | `string[]` | `[]` | Glob patterns to always exclude |
-| `outputMode` | `string` | `"compact"` | Default output mode |
+| `outputMode` | `string` | `"json"` | Default output mode |
 | `limit` | `number` | `10` | Default result limit for find |
 | `fuzzy.threshold` | `number` | `0.4` | Fuzzy match threshold (0=exact, 1=loose) |
 | `fuzzy.weights` | `object` | See above | Field weights for search scoring |

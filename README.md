@@ -120,7 +120,7 @@ Example configuration:
 {
   "defaultDirectories": ["./docs"],
   "exclude": ["**/node_modules/**", "**/.*/**"],
-  "outputMode": "compact",
+  "outputMode": "json",
   "limit": 10
 }
 ```

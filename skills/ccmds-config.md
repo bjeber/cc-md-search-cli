@@ -37,7 +37,7 @@ The CLI looks for config files in this order:
 {
   "defaultDirectories": ["./docs"],
   "exclude": ["**/node_modules/**", "**/.*/**"],
-  "outputMode": "compact",
+  "outputMode": "json",
   "limit": 10,
   "fuzzy": {
     "threshold": 0.4,
@@ -66,7 +66,7 @@ The CLI looks for config files in this order:
 |--------|------|---------|-------------|
 | `defaultDirectories` | `string[]` | `["."]` | Directories to search |
 | `exclude` | `string[]` | `[]` | Glob patterns to exclude |
-| `outputMode` | `string` | `"compact"` | Default output mode |
+| `outputMode` | `string` | `"json"` | Default output mode |
 | `limit` | `number` | `10` | Default result limit |
 | `fuzzy.threshold` | `number` | `0.4` | Match threshold (0=exact, 1=loose) |
 | `fuzzy.weights` | `object` | See above | Field weights for scoring |

@@ -59,11 +59,12 @@ ccmds show ./docs/api.md              # Show file
 
 | Mode | Use | Context |
 |------|-----|---------|
+| `json` | AI-optimized (default) | Compact |
 | `files` | Just need paths | Minimal |
-| `compact` | Overview + snippets | Small |
+| `compact` | Human-readable snippets | Small |
 | `detailed` | Full context | Medium |
 
-Default: `compact`. Use `-o files` for minimal context.
+Default: `json`. Use `-o compact` for human-readable output.
 
 ## Common Overrides
 

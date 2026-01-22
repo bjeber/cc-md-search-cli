@@ -106,16 +106,16 @@ ccmds grep "TODO|FIXME|HACK"
 
 | Mode | When to Use |
 |------|-------------|
+| `json` | AI-optimized, compact (default) |
 | `files` | Just need to know which files contain info |
-| `compact` | Quick overview with snippets (default) |
+| `compact` | Human-readable overview with snippets |
 | `detailed` | Need full context around matches |
-| `json` | Processing results programmatically |
 
 ```bash
+ccmds find "auth"               # Default: compact JSON for AI
 ccmds find "auth" -o files      # Minimal: just paths
-ccmds find "auth" -o compact    # Default: paths + snippets
+ccmds find "auth" -o compact    # Human-readable snippets
 ccmds find "auth" -o detailed   # Full context
-ccmds find "auth" -o json       # Machine readable
 ```
 
 ---

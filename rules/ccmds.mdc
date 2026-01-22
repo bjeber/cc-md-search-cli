@@ -45,7 +45,7 @@ ccmds init -d ./docs ./api/docs
 {
   "defaultDirectories": ["./docs", "./api/docs"],
   "exclude": ["**/node_modules/**", "**/.*/**"],
-  "outputMode": "compact",
+  "outputMode": "json",
   "limit": 10
 }
 ```
@@ -410,12 +410,12 @@ ccmds grep "cache.*invalidat"
 
 | Mode | Use Case | Context Size |
 |------|----------|--------------|
+| `json` | AI-optimized (default) | **Compact** |
 | `files` | Just need file paths | **Minimal** |
-| `compact` | Quick overview + snippets | **Small** |
+| `compact` | Human-readable snippets | Small |
 | `detailed` | Full context around matches | Medium |
-| `json` | Programmatic processing | Variable |
 
-**Default to `compact` or `files` to save context.**
+**Default is `json` (optimized for AI). Use `-o compact` for human-readable output.**
 
 ---
 
@@ -439,7 +439,7 @@ Use CLI parameters only when config defaults aren't sufficient:
 - Start with `outline` to understand structure first
 - Use `section` to extract only needed content
 - Use `find` for broad queries, `grep` for exact matches
-- Use `compact` or `files` output by default
+- Default `json` output is AI-optimized
 
 ### DON'T:
 - Don't specify directories if config has them

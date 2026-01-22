@@ -1961,7 +1961,7 @@ describe('Configuration System', () => {
 
     test('has correct default values', () => {
       expect(DEFAULT_CONFIG.defaultDirectories).toEqual(['.']);
-      expect(DEFAULT_CONFIG.outputMode).toBe('compact');
+      expect(DEFAULT_CONFIG.outputMode).toBe('json');
       expect(DEFAULT_CONFIG.limit).toBe(10);
       expect(DEFAULT_CONFIG.extensions).toContain('.md');
       expect(DEFAULT_CONFIG.extensions).toContain('.markdown');
@@ -2335,7 +2335,7 @@ describe('CLI Configuration Commands', () => {
 
         expect(exitCode).toBe(0);
         expect(stdout).toContain('defaults');
-        expect(stdout).toContain('compact');
+        expect(stdout).toContain('json');
 
         rmSync(testDir, { recursive: true });
       });
@@ -2364,7 +2364,7 @@ describe('CLI Configuration Commands', () => {
 
         const config = JSON.parse(stdout);
         expect(config.limit).toBe(10);
-        expect(config.outputMode).toBe('compact');
+        expect(config.outputMode).toBe('json');
 
         rmSync(testDir, { recursive: true });
       });
