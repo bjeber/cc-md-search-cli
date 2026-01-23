@@ -1,0 +1,61 @@
+{
+  "documentDirectories": [
+    {
+      "name": "api",
+      "path": "./packages/api/docs",
+      "description": "API reference documentation"
+    },
+    {
+      "name": "guides",
+      "path": "./docs/guides",
+      "description": "User guides and tutorials"
+    },
+    {
+      "name": "wiki",
+      "path": "~/company-wiki/engineering",
+      "description": "Internal engineering wiki"
+    }
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    ".*/**",
+    "**/CHANGELOG.md",
+    "**/LICENSE.md"
+  ],
+  "outputMode": "compact",
+  "limit": 15,
+  "extensions": [".md", ".markdown", ".mdx"],
+  "fuzzy": {
+    "threshold": 0.3,
+    "weights": {
+      "title": 3,
+      "description": 2,
+      "tags": 2,
+      "body": 1
+    }
+  },
+  "preview": {
+    "topResults": 800,
+    "midResults": 400,
+    "otherResults": 200
+  },
+  "frontmatterFields": [
+    "title",
+    "description",
+    "tags",
+    "category",
+    "author",
+    "lastUpdated"
+  ],
+  "aliases": {
+    "auth": "authentication authorization login",
+    "db": "database postgres sql query"
+  },
+  "cache": {
+    "enabled": true,
+    "ttl": 600,
+    "maxEntries": 100
+  }
+}
