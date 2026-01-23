@@ -71,6 +71,7 @@ Default: `json`. Use `-o compact` for human-readable output.
 ```bash
 ccmds find "query" -l 5              # Limit results
 ccmds find "query" ./other/docs      # Different directory
+ccmds find "query" --doc api         # Search only "api" docs
 ccmds grep "pattern" -o files        # Files only output
 ccmds list -e "**/archive/**"        # Exclude pattern
 ```

@@ -35,7 +35,10 @@ The CLI looks for config files in this order:
 
 ```json
 {
-  "documentDirectories": ["./docs"],
+  "documentDirectories": [
+    "./docs",
+    { "name": "api", "path": "./api-docs", "description": "API reference" }
+  ],
   "exclude": ["**/node_modules/**", "**/.*/**"],
   "outputMode": "json",
   "limit": 10,
@@ -64,7 +67,7 @@ The CLI looks for config files in this order:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `documentDirectories` | `string[]` | `["."]` | Directories to search |
+| `documentDirectories` | `string[] \| object[]` | `["."]` | Directories to search (strings or named entries) |
 | `exclude` | `string[]` | `[]` | Glob patterns to exclude |
 | `outputMode` | `string` | `"json"` | Default output mode |
 | `limit` | `number` | `10` | Default result limit |
@@ -78,6 +81,40 @@ The CLI looks for config files in this order:
 | `cache.enabled` | `boolean` | `false` | Enable result caching |
 | `cache.ttl` | `number` | `300` | Cache expiration in seconds |
 | `cache.maxEntries` | `number` | `50` | Max cached queries |
+
+---
+
+## Named Documentation Entries
+
+Give directories names for targeted searching with `--doc`:
+
+```json
+{
+  "documentDirectories": [
+    "./general-docs",
+    { "name": "api", "path": "./api-reference", "description": "API documentation" },
+    { "name": "guides", "path": "./tutorials", "description": "User guides" }
+  ]
+}
+```
+
+Then filter searches:
+
+```bash
+ccmds find "auth" --doc api      # Only search api-reference
+ccmds list --doc guides          # Only list tutorial files
+ccmds grep "TODO" --doc api      # Grep only in API docs
+```
+
+**Name matching is prefix-based**: `--doc api` matches `api`, `api-reference`, `api-v2`, etc.
+
+### Named Entry Format
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Short identifier for `--doc` filtering |
+| `path` | Yes | Directory path (relative or absolute) |
+| `description` | No | Human-readable description |
 
 ---
 
@@ -136,6 +173,20 @@ ccmds find "x" --no-cache  # Skip cache
   "exclude": ["**/node_modules/**", "**/dist/**", "**/.*/**"]
 }
 ```
+
+### Monorepo with Named Docs
+
+```json
+{
+  "documentDirectories": [
+    { "name": "web", "path": "./packages/web/docs", "description": "Web app docs" },
+    { "name": "api", "path": "./packages/api/docs", "description": "API docs" },
+    { "name": "shared", "path": "./docs/shared", "description": "Shared documentation" }
+  ]
+}
+```
+
+Use `--doc web`, `--doc api`, or `--doc shared` to filter searches.
 
 ### Strict Search (Less Fuzzy)
 

@@ -10,11 +10,11 @@ CC-MD-Search-CLI (`ccmds`) helps AI coding assistants like [Claude Code](https:/
 
 When an AI coding assistant needs to reference your documentation:
 
-| Without ccmds | With ccmds |
-|---------------|------------|
-| Loads entire files into context | Searches and returns only relevant snippets |
-| Uses many tokens on irrelevant content | Minimal context usage |
-| May miss information across files | Searches all docs instantly |
+| Without ccmds                          | With ccmds                                  |
+| -------------------------------------- | ------------------------------------------- |
+| Loads entire files into context        | Searches and returns only relevant snippets |
+| Uses many tokens on irrelevant content | Minimal context usage                       |
+| May miss information across files      | Searches all docs instantly                 |
 
 **Result:** Faster responses, lower token usage, better answers.
 
@@ -47,15 +47,38 @@ This creates a `.ccmdsrc` file with `documentDirectories` pointing to your docs 
 
 Adjust the path to match your project's documentation location (e.g., `./documentation`, `./wiki`, or multiple directories).
 
+#### Project-Level Agent Instructions
+
+Add ccmds guidance to your project's `CLAUDE.md` or `AGENTS.md` file:
+
+```markdown
+## Documentation Searches
+
+When users ask about documentation, guides, setup, or API reference:
+
+- Use the `ccmds` skill for efficient markdown documentation search
+- Supports fuzzy search, regex matching, and section extraction
+
+**Available Documentations:**
+- `api` - API reference and endpoints
+- `guides` - User guides and tutorials
+
+Use `--doc <name>` to search specific documentation (e.g., `ccmds find "auth" --doc api`).
+```
+
+This ensures AI assistants know to use ccmds when you ask documentation questions.
+
 ### 3. Set Up Your AI Assistant
 
 **For Claude Code:**
+
 ```bash
 mkdir -p ~/.claude/skills/ccmds
 cp $(npm root -g)/cc-md-search-cli/skills/*.md ~/.claude/skills/ccmds/
 ```
 
 **For Cursor:**
+
 ```bash
 mkdir -p .cursor/rules
 cp $(npm root -g)/cc-md-search-cli/rules/ccmds.mdc .cursor/rules/
@@ -82,6 +105,7 @@ ccmds section ./docs/setup.md "Installation"
 ```
 
 The AI uses these commands behind the scenes when you ask questions like:
+
 - "How do I set up authentication?"
 - "What are the API endpoints?"
 - "Where is the deployment guide?"
@@ -98,21 +122,24 @@ The AI uses these commands behind the scenes when you ask questions like:
 
 ## Commands
 
-| Command | Purpose |
-|---------|---------|
-| `ccmds find <query>` | Fuzzy search for relevant documents |
-| `ccmds grep <pattern>` | Regex/pattern search with smart context |
-| `ccmds list` | List all markdown files |
-| `ccmds outline` | Show document structure (headings only) |
-| `ccmds section <file> <heading>` | Extract a specific section |
-| `ccmds show <file>` | Display full file content |
-| `ccmds config` | Show current configuration |
-| `ccmds init` | Create configuration file |
+| Command                          | Purpose                                 |
+| -------------------------------- | --------------------------------------- |
+| `ccmds find <query>`             | Fuzzy search for relevant documents     |
+| `ccmds grep <pattern>`           | Regex/pattern search with smart context |
+| `ccmds list`                     | List all markdown files                 |
+| `ccmds outline`                  | Show document structure (headings only) |
+| `ccmds section <file> <heading>` | Extract a specific section              |
+| `ccmds show <file>`              | Display full file content               |
+| `ccmds docs`                     | List all configured documentations      |
+| `ccmds config`                   | Show current configuration              |
+| `ccmds init`                     | Create configuration file               |
 
 **Common options:**
+
 - `-l, --limit <n>` - Limit results
 - `-o, --output <mode>` - Output format: compact, detailed, files, json
 - `-e, --exclude <patterns>` - Exclude patterns (glob syntax)
+- `--doc <name>` - Search only in named documentation
 
 See `ccmds --help` or `ccmds <command> --help` for full options.
 
@@ -136,6 +163,26 @@ Example configuration:
 ```
 
 With a config file, commands use your defaults automatically - no need to specify directories each time.
+
+### Named Documentation Directories
+
+Configure multiple documentation sources with names and descriptions for easier filtering:
+
+```json
+{
+  "documentDirectories": [
+    { "name": "api", "path": "./api-docs", "description": "API reference" },
+    { "name": "guides", "path": "./guides", "description": "User guides" }
+  ]
+}
+```
+
+Then search specific docs:
+
+```bash
+ccmds find "authentication" --doc api    # Search only API docs
+ccmds docs                               # List all configured docs
+```
 
 See [CONFIGURATION.md](./CONFIGURATION.md) for detailed options including fuzzy search tuning, preview lengths, and exclude patterns.
 
@@ -167,6 +214,7 @@ npm link
 ### Claude Code
 
 1. Copy the skill files to your Claude Code skills directory:
+
    ```bash
    mkdir -p ~/.claude/skills/ccmds
    cp skills/*.md ~/.claude/skills/ccmds/
@@ -179,6 +227,7 @@ The skill includes a slim main file (~90 lines) plus reference docs that load on
 ### Cursor IDE
 
 1. Copy the rule file to your project:
+
    ```bash
    mkdir -p .cursor/rules
    cp rules/ccmds.mdc .cursor/rules/
@@ -193,6 +242,7 @@ Both integrations include command references, workflow strategies, and best prac
 For best search results:
 
 **Use clear structure:**
+
 ```
 docs/
 ├── setup/           # Installation & setup
@@ -202,6 +252,7 @@ docs/
 ```
 
 **Add frontmatter:**
+
 ```markdown
 ---
 title: API Authentication Guide

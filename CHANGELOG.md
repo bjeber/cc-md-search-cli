@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.3] - 2026-01-22
 
 ### Added
+
 - **Configuration file support** - `.ccmdsrc` files for project-specific settings
 - **Hierarchical config lookup** - Project → parent directories → home directory → defaults
 - **`init` command** - Create `.ccmdsrc` config files with `ccmds init`
@@ -14,8 +15,11 @@ All notable changes to this project will be documented in this file.
 - **`cache` command** - `ccmds cache stats` and `ccmds cache clear`
 - **`--no-cache` flag** - Skip cache for individual commands
 - **Modular skills documentation** - Split into SKILL.md + reference sub-files
+- **Named documentation support** - `normalizeDocumentDirectories` and `resolveDirectories` functions for named doc entries with `--doc` prefix filtering
+- **Project-level agent instructions** - README now includes example `CLAUDE.md` setup for AI assistants
 
 ### Changed
+
 - **Rebranded to ccmds** - Skills and rules renamed from md-search to ccmds
 - **Default output mode** - Changed from `compact` to `json` for better AI consumption
 - **JSON output optimized** - Compact format with no whitespace, rounded scores
@@ -25,27 +29,35 @@ All notable changes to this project will be documented in this file.
   - `ccmds-commands.md` - Full command reference
   - `ccmds-examples.md` - Workflows and patterns
   - `ccmds-config.md` - Configuration schema
+- **Test suite refactored** - Split monolithic `cli.test.js` into focused test files.
+- **Code style improvements** - Consistent formatting with trailing commas and better line breaks
 
 ### Fixed
+
 - Glob pattern matching for exclude patterns (recursive matching)
+- **`--no-config` flag** - Fixed Commander.js option parsing (was setting `options.config = false` instead of `options.noConfig = true`)
 
 ## [1.0.2] - 2026-01-17
 
 ### Changed
+
 - Reorganized installation section with grouped options (Bun, NPM, Clone Repository)
 - Added package location paths for each installation method
 - Added guidance for locating skill and rule template files
 - Clarified automatic CLI registration for global installs
 
 ### Fixed
+
 - Fixed missing `-g` flag for npm global install command
 
 ### Added
+
 - Header image to README
 
 ## [1.0.1] - 2026-01-17
 
 ### Added
+
 - New `outline` command - show document structure (headings only) without loading content
 - New `section` command - extract specific sections by heading name
 - New `grep` command alias - regex pattern matching with smart context
@@ -61,17 +73,20 @@ All notable changes to this project will be documented in this file.
 - Test fixtures for various markdown scenarios
 
 ### Changed
+
 - Shebang changed from `node` to `bun` for improved performance
 - Enhanced skill file with detailed usage examples and context-efficient patterns
 - Expanded README with full command reference and examples
 - Improved skill template for easier customization
 
 ### Fixed
+
 - Context deduplication for overlapping grep matches
 
 ## [1.0.0] - 2026-01-17
 
 ### Added
+
 - Initial release of Claude Code Markdown Search CLI
 - Fuzzy search functionality using Fuse.js for flexible text matching
 - Regex pattern matching support for precise searches

@@ -87,7 +87,7 @@ The CLI looks for config files in this order:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `documentDirectories` | `string[]` | `["."]` | Directories to search when none specified |
+| `documentDirectories` | `string[] \| object[]` | `["."]` | Directories to search (strings or named objects) |
 | `exclude` | `string[]` | `[]` | Glob patterns to always exclude |
 | `outputMode` | `string` | `"json"` | Default output mode |
 | `limit` | `number` | `10` | Default result limit for find |
@@ -159,6 +159,87 @@ The CLI looks for config files in this order:
   "fuzzy": {
     "threshold": 0.2
   }
+}
+```
+
+---
+
+## Named Documentation Directories
+
+For projects with multiple documentation sources, you can use named entries with descriptions:
+
+### Basic Format
+
+```json
+{
+  "documentDirectories": [
+    "./legacy-docs",
+    {
+      "name": "api",
+      "path": "./api-docs",
+      "description": "API reference documentation"
+    },
+    {
+      "name": "guides",
+      "path": "./user-guides",
+      "description": "User guides and tutorials"
+    }
+  ]
+}
+```
+
+### Entry Properties
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `name` | No | Name for filtering with `--doc`. Auto-generated from path basename if not provided |
+| `path` | Yes | Path to documentation directory (relative to config file) |
+| `description` | No | Description shown in `ccmds docs` output |
+
+### Listing Documentations
+
+```bash
+ccmds docs          # List all configured documentations
+ccmds docs -o json  # JSON output
+```
+
+### Filtering by Documentation
+
+Use `--doc <name>` to search only in a specific documentation:
+
+```bash
+ccmds find "authentication" --doc api     # Search only API docs
+ccmds grep "function" --doc guides        # Search only guides
+ccmds list --doc api                      # List files in API docs
+```
+
+The `--doc` option supports case-insensitive prefix matching:
+
+```bash
+ccmds find "auth" --doc gui    # Matches "guides"
+ccmds find "auth" --doc API    # Matches "api" (case-insensitive)
+```
+
+### Name Auto-Generation
+
+For string entries or objects without explicit names, the name is auto-generated from the directory basename:
+
+```json
+{
+  "documentDirectories": [
+    "./docs",           // Name: "docs"
+    "../other/docs"     // Name: "docs-2" (deduplication)
+  ]
+}
+```
+
+### Backwards Compatibility
+
+String entries continue to work exactly as before:
+
+```json
+{
+  "documentDirectories": ["./docs", "./wiki"]
 }
 ```
 

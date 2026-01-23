@@ -52,6 +52,18 @@ ccmds init -d ./docs ./api/docs
 
 When a config file exists, **you don't need to specify directories** in commands - they use the configured defaults automatically.
 
+### Named Documentation
+
+If the project has named documentation entries in `.ccmdsrc`:
+
+```bash
+ccmds find "query" --doc api      # Search only "api" docs
+ccmds list --doc guides           # List only "guides" docs
+ccmds grep "TODO" --doc api       # Grep only in API docs
+```
+
+This is useful for projects with multiple doc sets (API, guides, tutorials).
+
 ---
 
 ## Trigger Patterns
@@ -134,6 +146,7 @@ ccmds list -e "**/archive/**"
 |------|-------------|
 | `--config <path>` | Use specific config file |
 | `--no-config` | Ignore config files, use defaults |
+| `--doc <name>` | Search only named documentation (prefix match) |
 
 ---
 
@@ -151,6 +164,7 @@ ccmds find <query> [directories...]
 | `-l, --limit <n>` | Max results | `limit` |
 | `-o, --output <mode>` | compact, detailed, files, json | `outputMode` |
 | `-e, --exclude <patterns...>` | Exclude patterns | `exclude` |
+| `--doc <name>` | Named doc filter (prefix) | - |
 | `-r, --raw` | Disable adaptive previews | - |
 
 **Extended Search Syntax** (space = AND by default):
@@ -175,6 +189,9 @@ ccmds find "setup | installation" ./guides
 
 # Detailed output for deep research
 ccmds find "error handling" -l 3 -o detailed
+
+# Search only API docs
+ccmds find "endpoints" --doc api
 ```
 
 **Best for**: Exploratory searches, multi-term queries, related topics.
@@ -194,6 +211,7 @@ ccmds grep <pattern> [directories...]
 |------|-------------|------------|
 | `-o, --output <mode>` | compact, detailed, files, json | `outputMode` |
 | `-e, --exclude <patterns...>` | Exclude patterns | `exclude` |
+| `--doc <name>` | Named doc filter (prefix) | - |
 | `-c, --context <n>` | Context lines (with --raw) | - |
 | `-s, --case-sensitive` | Case sensitive | - |
 | `-r, --raw` | Line-based context (not smart) | - |
@@ -208,6 +226,9 @@ ccmds grep "TODO|FIXME" -o files
 
 # Case-sensitive API search
 ccmds grep "GraphQL" --case-sensitive
+
+# Grep only in API docs
+ccmds grep "TODO" --doc api
 ```
 
 **Best for**: Specific terms, regex patterns, code snippets, known terminology.
@@ -228,6 +249,7 @@ ccmds outline [paths...]
 | `-d, --depth <n>` | Max heading depth (default: 6) |
 | `-o, --output <mode>` | text, json |
 | `-e, --exclude <patterns...>` | Exclude patterns |
+| `--doc <name>` | Named doc filter (prefix) |
 
 **Examples**:
 ```bash
@@ -239,6 +261,9 @@ ccmds outline ./docs/guide.md
 
 # Limit to h1 and h2 only
 ccmds outline -d 2
+
+# Outline only guides docs
+ccmds outline --doc guides
 ```
 
 **Best for**: Minimal context usage, finding sections, understanding organization.
@@ -279,6 +304,7 @@ ccmds list [directories...]
 |------|-------------|
 | `-c, --count` | Show only count |
 | `-e, --exclude <patterns...>` | Exclude patterns |
+| `--doc <name>` | Named doc filter (prefix) |
 
 **Examples**:
 ```bash
@@ -290,6 +316,9 @@ ccmds list --count
 
 # Exclude archive
 ccmds list -e "**/archive/**"
+
+# List only API doc files
+ccmds list --doc api
 ```
 
 ---
@@ -459,6 +488,7 @@ Use CLI parameters only when config defaults aren't sufficient:
 | "Show me the API reference" | `ccmds outline -d 2` then `ccmds show` |
 | "What's documented?" | `ccmds list` |
 | "Check the troubleshooting guide" | `ccmds find "troubleshooting" -o files` |
+| "Search API docs for auth" | `ccmds find "auth" --doc api` |
 
 ---
 
