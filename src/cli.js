@@ -1,52 +1,690 @@
 #!/usr/bin/env bun
 
 import { Command } from 'commander';
-import { readFileSync, readdirSync, statSync, realpathSync } from 'fs';
-import { join, relative } from 'path';
+import {
+  readFileSync,
+  readdirSync,
+  statSync,
+  realpathSync,
+  existsSync,
+  writeFileSync,
+  unlinkSync,
+  mkdirSync,
+} from 'fs';
+import { join, relative, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
+import { homedir } from 'os';
+import { createHash } from 'crypto';
 import matter from 'gray-matter';
 import Fuse from 'fuse.js';
 
 const program = new Command();
 
-// Recursively find all markdown files
-function findMarkdownFiles(dir, baseDir = dir) {
+// ============================================================================
+// Configuration System
+// ============================================================================
+
+const CONFIG_FILE_NAMES = ['.ccmdsrc', '.ccmdsrc.json', 'ccmds.config.json'];
+
+const DEFAULT_CONFIG = {
+  documentDirectories: ['.'],
+  exclude: [],
+  outputMode: 'json',
+  limit: 10,
+  fuzzy: {
+    threshold: 0.4,
+    weights: {
+      title: 2,
+      description: 1.5,
+      tags: 1.5,
+      body: 1,
+    },
+  },
+  preview: {
+    topResults: 600,
+    midResults: 300,
+    otherResults: 150,
+  },
+  frontmatterFields: [
+    'title',
+    'description',
+    'tags',
+    'category',
+    'summary',
+    'keywords',
+  ],
+  extensions: ['.md', '.markdown'],
+  aliases: {},
+  cache: {
+    enabled: false,
+    ttl: 300,
+    maxEntries: 50,
+  },
+};
+
+/**
+ * Find config file by walking up directory tree
+ * @param {string} startDir - Directory to start searching from
+ * @returns {string|null} - Path to config file or null
+ */
+function findConfigFile(startDir = process.cwd()) {
+  let currentDir = startDir;
+
+  // Walk up directory tree
+  while (currentDir !== dirname(currentDir)) {
+    for (const configName of CONFIG_FILE_NAMES) {
+      const configPath = join(currentDir, configName);
+      if (existsSync(configPath)) {
+        return configPath;
+      }
+    }
+    currentDir = dirname(currentDir);
+  }
+
+  // Check home directory as fallback
+  const homeDir = homedir();
+  for (const configName of CONFIG_FILE_NAMES) {
+    const configPath = join(homeDir, configName);
+    if (existsSync(configPath)) {
+      return configPath;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Load and parse configuration file
+ * @param {string} configPath - Path to config file
+ * @returns {object} - Parsed configuration
+ */
+function loadConfigFile(configPath) {
+  try {
+    const content = readFileSync(configPath, 'utf-8');
+    const config = JSON.parse(content);
+
+    // Store the config file directory for resolving relative paths
+    config._configDir = dirname(configPath);
+    config._configPath = configPath;
+
+    return config;
+  } catch (err) {
+    console.error(`Error loading config file '${configPath}': ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * Load configuration with hierarchical lookup
+ * @param {object} options - CLI options that may override config
+ * @returns {object} - Merged configuration
+ */
+function loadConfig(options = {}) {
+  let config;
+
+  // If --no-config flag is set, return defaults
+  // Commander.js sets options.config = false for --no-config, not options.noConfig = true
+  if (options.noConfig || options.config === false) {
+    config = { ...DEFAULT_CONFIG, _source: 'defaults' };
+  } else if (options.config) {
+    // If explicit config path provided
+    const fileConfig = loadConfigFile(options.config);
+    if (fileConfig) {
+      config = mergeConfig(DEFAULT_CONFIG, fileConfig, options);
+    } else {
+      console.error(`Config file not found: ${options.config}`);
+      process.exit(1);
+    }
+  } else {
+    // Hierarchical lookup
+    const configPath = findConfigFile();
+    if (configPath) {
+      const fileConfig = loadConfigFile(configPath);
+      if (fileConfig) {
+        config = mergeConfig(DEFAULT_CONFIG, fileConfig, options);
+      } else {
+        config = { ...DEFAULT_CONFIG, _source: 'defaults' };
+      }
+    } else {
+      config = { ...DEFAULT_CONFIG, _source: 'defaults' };
+    }
+  }
+
+  // Handle --no-cache flag
+  if (options.noCache) {
+    config.cache = { ...config.cache, enabled: false };
+  }
+
+  return config;
+}
+
+/**
+ * Deep merge configuration objects
+ * @param {object} defaults - Default configuration
+ * @param {object} fileConfig - Configuration from file
+ * @param {object} cliOptions - CLI options (highest priority)
+ * @returns {object} - Merged configuration
+ */
+function mergeConfig(defaults, fileConfig, cliOptions = {}) {
+  const merged = { ...defaults };
+
+  // Merge file config
+  if (fileConfig) {
+    for (const key of Object.keys(fileConfig)) {
+      if (key.startsWith('_')) continue; // Skip internal keys
+
+      if (
+        typeof fileConfig[key] === 'object' &&
+        !Array.isArray(fileConfig[key]) &&
+        fileConfig[key] !== null
+      ) {
+        merged[key] = { ...defaults[key], ...fileConfig[key] };
+      } else {
+        merged[key] = fileConfig[key];
+      }
+    }
+    merged._source = fileConfig._configPath || 'file';
+    merged._configDir = fileConfig._configDir;
+  }
+
+  // CLI options override (map CLI option names to config keys)
+  if (cliOptions.output) merged.outputMode = cliOptions.output;
+  if (cliOptions.limit) merged.limit = parseInt(cliOptions.limit);
+
+  return merged;
+}
+
+/**
+ * Normalize and deduplicate document directory entries
+ * @param {Array} entries - Mixed array of strings and objects
+ * @param {string} configDir - Base directory for resolving paths
+ * @returns {Array} - Normalized directory objects with resolved paths
+ */
+function normalizeDocumentDirectories(entries, configDir) {
+  const usedNames = new Map(); // Track name usage for deduplication
+
+  return entries.map((entry) => {
+    const isObject = typeof entry === 'object' && entry !== null;
+    const path = isObject ? entry.path : entry;
+    const description = isObject ? entry.description || null : null;
+
+    // Resolve the path
+    let resolvedPath;
+    if (path.startsWith('/')) {
+      resolvedPath = path;
+    } else if (path.startsWith('~')) {
+      resolvedPath = path.replace(/^~/, homedir());
+    } else {
+      resolvedPath = join(configDir, path);
+    }
+
+    // Determine name (explicit or from basename)
+    let baseName = isObject && entry.name ? entry.name : basename(resolvedPath);
+
+    // Deduplicate names
+    let name = baseName;
+    const count = usedNames.get(baseName) || 0;
+    if (count > 0) {
+      name = `${baseName}-${count + 1}`;
+    }
+    usedNames.set(baseName, count + 1);
+
+    return { name, path, resolvedPath, description };
+  });
+}
+
+/**
+ * Resolve directories from config (handles relative paths)
+ * @param {string[]} directories - Directory paths from CLI or config
+ * @param {object} config - Configuration object
+ * @param {string} filterDoc - Optional doc name filter (prefix match)
+ * @returns {Array} - Array of directory entry objects with name, path, resolvedPath, description
+ */
+function resolveDirectories(directories, config, filterDoc = null) {
+  const configDir = config._configDir || process.cwd();
+  let entries;
+
+  if (directories && directories.length > 0) {
+    // CLI directories override config - wrap as entries
+    if (filterDoc) {
+      console.error('Warning: --doc is ignored when directories are specified via CLI');
+    }
+    entries = normalizeDocumentDirectories(
+      directories.map(d => ({ path: d })),
+      process.cwd()
+    );
+  } else {
+    entries = normalizeDocumentDirectories(config.documentDirectories, configDir);
+
+    // Filter by doc name (prefix match, case-insensitive)
+    if (filterDoc) {
+      const filterLower = filterDoc.toLowerCase();
+      entries = entries.filter(e =>
+        e.name.toLowerCase().startsWith(filterLower)
+      );
+      if (entries.length === 0) {
+        console.error(`Documentation "${filterDoc}" not found. Use 'ccmds docs' to list available.`);
+        process.exit(1);
+      }
+    }
+  }
+
+  return entries;
+}
+
+/**
+ * Format a file path based on pathFormat config
+ * @param {string} fullPath - Absolute path to the file
+ * @param {string} relativePath - Path relative to docs directory
+ * @param {object} config - Configuration object
+ * @returns {string} - Formatted path
+ */
+function formatOutputPath(fullPath, relativePath, config) {
+  const pathFormat = config.pathFormat || 'cwd';
+
+  switch (pathFormat) {
+    case 'absolute':
+      return fullPath;
+    case 'docs':
+      return relativePath;
+    case 'cwd':
+    default:
+      return relative(process.cwd(), fullPath) || fullPath;
+  }
+}
+
+/**
+ * Check if a path matches any exclude pattern
+ * @param {string} filePath - Path to check
+ * @param {string[]} excludePatterns - Array of glob-like patterns
+ * @returns {boolean} - True if path should be excluded
+ */
+function shouldExclude(filePath, excludePatterns) {
+  if (!excludePatterns || excludePatterns.length === 0) {
+    return false;
+  }
+
+  // Normalize path separators
+  const normalizedPath = filePath.replace(/\\/g, '/');
+
+  for (const pattern of excludePatterns) {
+    if (matchGlobPattern(normalizedPath, pattern)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Match a path against a glob pattern
+ * @param {string} path - Normalized path to check
+ * @param {string} pattern - Glob pattern
+ * @returns {boolean} - True if path matches pattern
+ */
+function matchGlobPattern(path, pattern) {
+  // Normalize pattern
+  const normalizedPattern = pattern.replace(/\\/g, '/');
+
+  // Split pattern into segments
+  const patternParts = normalizedPattern.split('/');
+  const pathParts = path.split('/');
+
+  return matchParts(pathParts, patternParts, 0, 0);
+}
+
+/**
+ * Recursively match path parts against pattern parts
+ */
+function matchParts(pathParts, patternParts, pathIdx, patternIdx) {
+  // If we've matched all pattern parts, check if path is also exhausted
+  if (patternIdx >= patternParts.length) {
+    return pathIdx >= pathParts.length;
+  }
+
+  const patternPart = patternParts[patternIdx];
+
+  // Handle ** (globstar) - matches zero or more directories
+  if (patternPart === '**') {
+    // ** at the end matches everything
+    if (patternIdx === patternParts.length - 1) {
+      return true;
+    }
+
+    // Try matching ** with zero or more path segments
+    for (let i = pathIdx; i <= pathParts.length; i++) {
+      if (matchParts(pathParts, patternParts, i, patternIdx + 1)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // If path is exhausted but pattern isn't
+  if (pathIdx >= pathParts.length) {
+    return false;
+  }
+
+  const pathPart = pathParts[pathIdx];
+
+  // Match single segment with possible wildcards
+  if (matchSegment(pathPart, patternPart)) {
+    return matchParts(pathParts, patternParts, pathIdx + 1, patternIdx + 1);
+  }
+
+  return false;
+}
+
+/**
+ * Match a single path segment against a pattern segment (handles * and ?)
+ */
+function matchSegment(segment, pattern) {
+  // Convert pattern to regex
+  let regexStr = '^';
+  for (let i = 0; i < pattern.length; i++) {
+    const char = pattern[i];
+    if (char === '*') {
+      regexStr += '.*';
+    } else if (char === '?') {
+      regexStr += '.';
+    } else if (/[.+^${}()|[\]\\]/.test(char)) {
+      regexStr += '\\' + char;
+    } else {
+      regexStr += char;
+    }
+  }
+  regexStr += '$';
+
+  return new RegExp(regexStr).test(segment);
+}
+
+/**
+ * Generate default configuration content
+ * @param {object} options - Options for config generation
+ * @returns {string} - JSON configuration content
+ */
+function generateDefaultConfig(options = {}) {
+  const config = {
+    documentDirectories: options.directories || ['./docs'],
+    exclude: ['**/node_modules/**', '**/.*/**'],
+    outputMode: 'json',
+    limit: 10,
+    fuzzy: {
+      threshold: 0.4,
+    },
+    extensions: ['.md', '.markdown'],
+    aliases: {},
+  };
+
+  return JSON.stringify(config);
+}
+
+// ============================================================================
+// Cache System
+// ============================================================================
+
+const CACHE_FILE = '.ccmds-cache.json';
+const CACHE_VERSION = 1;
+
+/**
+ * Generate a cache key from command and options
+ * @param {string} command - Command name
+ * @param {object} params - Parameters to include in key
+ * @returns {string} - Cache key hash
+ */
+function generateCacheKey(command, params) {
+  const keyData = JSON.stringify({ command, ...params });
+  return createHash('md5').update(keyData).digest('hex').substring(0, 12);
+}
+
+/**
+ * Get cache file path (in project root or config directory)
+ * @param {object} config - Configuration object
+ * @returns {string} - Cache file path
+ */
+function getCacheFilePath(config) {
+  const baseDir = config._configDir || process.cwd();
+  return join(baseDir, CACHE_FILE);
+}
+
+/**
+ * Read cache from file
+ * @param {string} cachePath - Path to cache file
+ * @returns {object} - Cache data or empty cache structure
+ */
+function readCache(cachePath) {
+  try {
+    if (existsSync(cachePath)) {
+      const data = JSON.parse(readFileSync(cachePath, 'utf-8'));
+      if (data.version === CACHE_VERSION) {
+        return data;
+      }
+    }
+  } catch (err) {
+    // Ignore corrupted cache
+  }
+  return { version: CACHE_VERSION, entries: {} };
+}
+
+/**
+ * Write cache to file
+ * @param {string} cachePath - Path to cache file
+ * @param {object} cache - Cache data
+ */
+function writeCache(cachePath, cache) {
+  try {
+    writeFileSync(cachePath, JSON.stringify(cache));
+  } catch (err) {
+    // Ignore write errors
+  }
+}
+
+/**
+ * Get cached result if valid
+ * @param {object} config - Configuration object
+ * @param {string} cacheKey - Cache key
+ * @returns {object|null} - Cached results or null
+ */
+function getCachedResult(config, cacheKey) {
+  if (!config.cache?.enabled) return null;
+
+  const cachePath = getCacheFilePath(config);
+  const cache = readCache(cachePath);
+  const entry = cache.entries[cacheKey];
+
+  if (!entry) return null;
+
+  // Check TTL
+  const ttl = config.cache.ttl || 300;
+  const age = (Date.now() - entry.created) / 1000;
+  if (age > ttl) {
+    // Expired - remove entry
+    delete cache.entries[cacheKey];
+    writeCache(cachePath, cache);
+    return null;
+  }
+
+  return entry.results;
+}
+
+/**
+ * Store result in cache
+ * @param {object} config - Configuration object
+ * @param {string} cacheKey - Cache key
+ * @param {string} command - Command name
+ * @param {any} results - Results to cache
+ */
+function setCachedResult(config, cacheKey, command, results) {
+  if (!config.cache?.enabled) return;
+
+  const cachePath = getCacheFilePath(config);
+  const cache = readCache(cachePath);
+
+  // Add new entry
+  cache.entries[cacheKey] = {
+    created: Date.now(),
+    command,
+    results,
+  };
+
+  // Trim old entries if over limit
+  const maxEntries = config.cache.maxEntries || 50;
+  const entries = Object.entries(cache.entries);
+  if (entries.length > maxEntries) {
+    // Sort by created time, remove oldest
+    entries.sort((a, b) => a[1].created - b[1].created);
+    const toRemove = entries.slice(0, entries.length - maxEntries);
+    toRemove.forEach(([key]) => delete cache.entries[key]);
+  }
+
+  writeCache(cachePath, cache);
+}
+
+/**
+ * Clear all cache entries
+ * @param {object} config - Configuration object
+ * @returns {number} - Number of entries cleared
+ */
+function clearCache(config) {
+  const cachePath = getCacheFilePath(config);
+  if (existsSync(cachePath)) {
+    const cache = readCache(cachePath);
+    const count = Object.keys(cache.entries).length;
+    unlinkSync(cachePath);
+    return count;
+  }
+  return 0;
+}
+
+/**
+ * Get cache statistics
+ * @param {object} config - Configuration object
+ * @returns {object} - Cache stats
+ */
+function getCacheStats(config) {
+  const cachePath = getCacheFilePath(config);
+  const cache = readCache(cachePath);
+  const entries = Object.values(cache.entries);
+  const now = Date.now();
+  const ttl = (config.cache?.ttl || 300) * 1000;
+
+  return {
+    enabled: config.cache?.enabled || false,
+    path: cachePath,
+    exists: existsSync(cachePath),
+    totalEntries: entries.length,
+    validEntries: entries.filter((e) => now - e.created < ttl).length,
+    expiredEntries: entries.filter((e) => now - e.created >= ttl).length,
+    commands: entries.reduce((acc, e) => {
+      acc[e.command] = (acc[e.command] || 0) + 1;
+      return acc;
+    }, {}),
+  };
+}
+
+// ============================================================================
+// File Discovery
+// ============================================================================
+
+/**
+ * Recursively find all markdown files
+ * @param {string} dir - Directory to search
+ * @param {string} baseDir - Base directory for relative paths
+ * @param {object} options - Options (exclude patterns, extensions)
+ * @param {boolean} isRecursive - Internal flag for recursive calls
+ * @returns {Array} - Array of file objects
+ */
+function findMarkdownFiles(
+  dir,
+  baseDir = dir,
+  options = {},
+  isRecursive = false
+) {
+  const extensions = options.extensions || ['.md', '.markdown'];
+  const exclude = options.exclude || [];
   let files = [];
-  const items = readdirSync(dir);
+
+  let items;
+  try {
+    items = readdirSync(dir);
+  } catch (err) {
+    // For top-level directory, throw error so caller can handle it
+    // For nested directories (recursive calls), silently skip
+    if (!isRecursive) {
+      throw err;
+    }
+    return files;
+  }
 
   for (const item of items) {
     const fullPath = join(dir, item);
-    const stat = statSync(fullPath);
+    const relativePath = relative(baseDir, fullPath);
+
+    // Check exclusion patterns
+    if (shouldExclude(relativePath, exclude)) {
+      continue;
+    }
+
+    let stat;
+    try {
+      stat = statSync(fullPath);
+    } catch (err) {
+      continue;
+    }
 
     if (stat.isDirectory()) {
-      files = files.concat(findMarkdownFiles(fullPath, baseDir));
-    } else if (item.endsWith('.md') || item.endsWith('.markdown')) {
-      files.push({
-        path: fullPath,
-        relativePath: relative(baseDir, fullPath)
-      });
+      files = files.concat(findMarkdownFiles(fullPath, baseDir, options, true));
+    } else {
+      const hasValidExtension = extensions.some((ext) => item.endsWith(ext));
+      if (hasValidExtension) {
+        files.push({
+          path: fullPath,
+          relativePath,
+        });
+      }
     }
   }
 
   return files;
 }
 
-// Find markdown files from multiple directories
-function findMarkdownFilesFromDirs(directories) {
+/**
+ * Find markdown files from multiple directories
+ * @param {Array} directoryEntries - Array of directory entries (objects with resolvedPath, name) or strings
+ * @param {object} options - Options (exclude patterns, extensions)
+ * @returns {Array} - Array of file objects
+ */
+function findMarkdownFilesFromDirs(directoryEntries, options = {}) {
   let allFiles = [];
-  for (const dir of directories) {
+
+  // Handle both legacy string arrays and new entry objects
+  const entries = directoryEntries.map(entry => {
+    if (typeof entry === 'string') {
+      return { resolvedPath: entry, path: entry, name: basename(entry) };
+    }
+    return entry;
+  });
+
+  for (const entry of entries) {
     try {
-      const files = findMarkdownFiles(dir, dir);
+      const dir = entry.resolvedPath;
+      const files = findMarkdownFiles(dir, dir, options);
+      // Enrich files with docName for multi-doc scenarios
+      const enrichedFiles = files.map(f => ({
+        ...f,
+        docName: entry.name,
+      }));
       // Prefix relative paths with directory name for multi-dir scenarios
-      const prefixedFiles = directories.length > 1
-        ? files.map(f => ({
-            path: f.path,
-            relativePath: join(dir, f.relativePath)
-          }))
-        : files;
+      const prefixedFiles =
+        entries.length > 1
+          ? enrichedFiles.map((f) => ({
+              ...f,
+              relativePath: join(basename(dir), f.relativePath),
+            }))
+          : enrichedFiles;
       allFiles = allFiles.concat(prefixedFiles);
     } catch (err) {
-      console.error(`Error reading directory '${dir}': ${err.message}`);
+      console.error(`Error reading directory '${entry.path}': ${err.message}`);
     }
   }
   return allFiles;
@@ -61,7 +699,7 @@ function parseMarkdownFile(filePath) {
     filePath,
     frontmatter,
     body,
-    fullContent: content
+    fullContent: content,
   };
 }
 
@@ -74,7 +712,7 @@ function extractHeadings(lines) {
       headings.push({
         level: match[1].length,
         text: match[2].trim(),
-        line: i
+        line: i,
       });
     }
   }
@@ -150,11 +788,19 @@ function extractSmartContext(lines, matchIndex) {
 }
 
 // Filter frontmatter to useful fields
-const USEFUL_FRONTMATTER = ['title', 'description', 'tags', 'category', 'summary', 'keywords'];
+const USEFUL_FRONTMATTER = [
+  'title',
+  'description',
+  'tags',
+  'category',
+  'summary',
+  'keywords',
+];
 
-function filterFrontmatter(frontmatter) {
+function filterFrontmatter(frontmatter, config = null) {
+  const fields = config?.frontmatterFields || USEFUL_FRONTMATTER;
   const filtered = {};
-  for (const key of USEFUL_FRONTMATTER) {
+  for (const key of fields) {
     if (frontmatter[key] !== undefined) {
       filtered[key] = frontmatter[key];
     }
@@ -165,7 +811,9 @@ function filterFrontmatter(frontmatter) {
 // Get section content by heading
 function extractSection(lines, headings, headingText) {
   // Support heading path like "Installation > Prerequisites"
-  const pathParts = headingText.split('>').map(p => p.trim().replace(/^#+\s*/, ''));
+  const pathParts = headingText
+    .split('>')
+    .map((p) => p.trim().replace(/^#+\s*/, ''));
   const targetHeading = pathParts[pathParts.length - 1].toLowerCase();
 
   let startIdx = -1;
@@ -195,8 +843,16 @@ function extractSection(lines, headings, headingText) {
 
 // Grep-style search
 function grepSearch(files, query, options) {
+  const config = options.config || DEFAULT_CONFIG;
   const results = [];
-  const regex = new RegExp(query, options.caseSensitive ? 'g' : 'gi');
+
+  let regex;
+  try {
+    regex = new RegExp(query, options.caseSensitive ? 'g' : 'gi');
+  } catch (err) {
+    console.error(`Invalid regex pattern '${query}': ${err.message}`);
+    return results;
+  }
 
   for (const file of files) {
     const parsed = parseMarkdownFile(file.path);
@@ -208,12 +864,17 @@ function grepSearch(files, query, options) {
     lines.forEach((line, index) => {
       if (regex.test(line)) {
         const { start, end } = options.raw
-          ? { start: Math.max(0, index - options.context), end: Math.min(lines.length - 1, index + options.context) }
+          ? {
+              start: Math.max(0, index - options.context),
+              end: Math.min(lines.length - 1, index + options.context),
+            }
           : extractSmartContext(lines, index);
 
         // Skip if this range overlaps with already processed
-        const overlaps = processedRanges.some(r =>
-          (start >= r.start && start <= r.end) || (end >= r.start && end <= r.end)
+        const overlaps = processedRanges.some(
+          (r) =>
+            (start >= r.start && start <= r.end) ||
+            (end >= r.start && end <= r.end)
         );
 
         if (!overlaps) {
@@ -223,7 +884,7 @@ function grepSearch(files, query, options) {
             line: line.trim(),
             headingPath: options.raw ? null : buildHeadingPath(headings, index),
             context: lines.slice(start, end + 1).join('\n'),
-            range: { start: start + 1, end: end + 1 }
+            range: { start: start + 1, end: end + 1 },
           });
         }
       }
@@ -233,7 +894,9 @@ function grepSearch(files, query, options) {
       results.push({
         file: file.relativePath,
         matches,
-        frontmatter: options.raw ? parsed.frontmatter : filterFrontmatter(parsed.frontmatter)
+        frontmatter: options.raw
+          ? parsed.frontmatter
+          : filterFrontmatter(parsed.frontmatter, config),
       });
     }
   }
@@ -243,7 +906,11 @@ function grepSearch(files, query, options) {
 
 // Fuzzy search for finding relevant documents
 function fuzzySearch(files, query, options) {
-  const documents = files.map(file => {
+  const config = options.config || DEFAULT_CONFIG;
+  const fuzzyConfig = config.fuzzy || DEFAULT_CONFIG.fuzzy;
+  const previewConfig = config.preview || DEFAULT_CONFIG.preview;
+
+  const documents = files.map((file) => {
     const parsed = parseMarkdownFile(file.path);
     return {
       file: file.relativePath,
@@ -251,30 +918,35 @@ function fuzzySearch(files, query, options) {
       body: parsed.body,
       frontmatter: parsed.frontmatter,
       tags: parsed.frontmatter.tags || [],
-      description: parsed.frontmatter.description || ''
+      description: parsed.frontmatter.description || '',
     };
   });
 
+  const weights = fuzzyConfig.weights || DEFAULT_CONFIG.fuzzy.weights;
   const fuse = new Fuse(documents, {
     keys: [
-      { name: 'title', weight: 2 },
-      { name: 'description', weight: 1.5 },
-      { name: 'body', weight: 1 },
-      { name: 'tags', weight: 1.5 }
+      { name: 'title', weight: weights.title || 2 },
+      { name: 'description', weight: weights.description || 1.5 },
+      { name: 'body', weight: weights.body || 1 },
+      { name: 'tags', weight: weights.tags || 1.5 },
     ],
-    threshold: 0.4,
+    threshold: fuzzyConfig.threshold || 0.4,
     includeScore: true,
     minMatchCharLength: 2,
-    useExtendedSearch: true
+    useExtendedSearch: true,
   });
 
   const results = fuse.search(query);
 
   return results.slice(0, options.limit).map((result, index) => {
-    // Adaptive preview length based on rank
-    const previewLength = options.raw ? 200 :
-      index < 3 ? 600 :
-      index < 7 ? 300 : 150;
+    // Adaptive preview length based on rank (configurable)
+    const previewLength = options.raw
+      ? 200
+      : index < 3
+        ? previewConfig.topResults || 600
+        : index < 7
+          ? previewConfig.midResults || 300
+          : previewConfig.otherResults || 150;
 
     // Prefer description over body truncation
     let preview = result.item.description || '';
@@ -282,15 +954,18 @@ function fuzzySearch(files, query, options) {
       preview = result.item.body.substring(0, previewLength);
     }
     if (preview.length >= previewLength) {
-      preview = preview.substring(0, previewLength).replace(/\s+\S*$/, '') + '...';
+      preview =
+        preview.substring(0, previewLength).replace(/\s+\S*$/, '') + '...';
     }
 
     return {
       file: result.item.file,
       score: result.score,
       title: result.item.title,
-      frontmatter: options.raw ? result.item.frontmatter : filterFrontmatter(result.item.frontmatter),
-      preview
+      frontmatter: options.raw
+        ? result.item.frontmatter
+        : filterFrontmatter(result.item.frontmatter, config),
+      preview,
     };
   });
 }
@@ -298,120 +973,264 @@ function fuzzySearch(files, query, options) {
 // Format output
 function formatOutput(results, mode) {
   if (mode === 'json') {
-    return JSON.stringify(results, null, 2);
+    // Compact JSON optimized for AI consumption
+    const compactResults = results.map((r) => {
+      const out = { file: r.file };
+
+      // Round score to 3 decimal places if present
+      if (r.score !== undefined) {
+        out.score = Math.round(r.score * 1000) / 1000;
+      }
+
+      // Include title only if not in frontmatter (avoid duplication)
+      if (r.title && (!r.frontmatter || r.frontmatter.title !== r.title)) {
+        out.title = r.title;
+      }
+
+      // Include frontmatter if present and non-empty
+      if (r.frontmatter && Object.keys(r.frontmatter).length > 0) {
+        out.frontmatter = r.frontmatter;
+      }
+
+      // Include matches for grep results
+      if (r.matches) {
+        out.matches = r.matches
+          .map((m) => ({
+            line: m.lineNumber,
+            heading: m.headingPath || undefined,
+            text: m.line,
+            context: m.context,
+          }))
+          .map((m) => {
+            // Remove undefined values
+            Object.keys(m).forEach((k) => m[k] === undefined && delete m[k]);
+            return m;
+          });
+      }
+
+      // Include preview for find results
+      if (r.preview) {
+        out.preview = r.preview.trim();
+      }
+
+      return out;
+    });
+
+    return JSON.stringify(compactResults);
   }
 
   if (mode === 'files') {
-    return results.map(r => r.file).join('\n');
+    return results.map((r) => r.file).join('\n');
   }
 
   if (mode === 'compact') {
-    return results.map(r => {
-      let output = `\n📄 ${r.file}`;
-      if (r.score !== undefined) {
-        output += ` (relevance: ${(1 - r.score).toFixed(2)})`;
-      }
-      if (r.matches) {
-        output += `\n   ${r.matches.length} match(es)`;
-        r.matches.slice(0, 3).forEach(m => {
-          if (m.headingPath) {
-            output += `\n   ┌ ${m.headingPath}`;
-          }
-          output += `\n   │ Line ${m.lineNumber}: ${m.line.substring(0, 100)}${m.line.length > 100 ? '...' : ''}`;
-        });
-      } else if (r.preview) {
-        output += `\n   ${r.preview}`;
-      }
-      return output;
-    }).join('\n');
+    return results
+      .map((r) => {
+        let output = `\n📄 ${r.file}`;
+        if (r.score !== undefined) {
+          output += ` (relevance: ${(1 - r.score).toFixed(2)})`;
+        }
+        if (r.matches) {
+          output += `\n   ${r.matches.length} match(es)`;
+          r.matches.slice(0, 3).forEach((m) => {
+            if (m.headingPath) {
+              output += `\n   ┌ ${m.headingPath}`;
+            }
+            output += `\n   │ Line ${m.lineNumber}: ${m.line.substring(0, 100)}${m.line.length > 100 ? '...' : ''}`;
+          });
+        } else if (r.preview) {
+          output += `\n   ${r.preview}`;
+        }
+        return output;
+      })
+      .join('\n');
   }
 
   // Default: detailed
-  return results.map(r => {
-    let output = `\n${'─'.repeat(60)}\n📄 ${r.file}\n${'─'.repeat(60)}`;
+  return results
+    .map((r) => {
+      let output = `\n${'─'.repeat(60)}\n📄 ${r.file}\n${'─'.repeat(60)}`;
 
-    if (r.frontmatter && Object.keys(r.frontmatter).length > 0) {
-      output += '\n' + Object.entries(r.frontmatter)
-        .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
-        .join(' | ');
-    }
+      if (r.frontmatter && Object.keys(r.frontmatter).length > 0) {
+        output +=
+          '\n' +
+          Object.entries(r.frontmatter)
+            .map(
+              ([k, v]) =>
+                `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`
+            )
+            .join(' | ');
+      }
 
-    if (r.matches) {
-      r.matches.forEach(m => {
-        if (m.headingPath) {
-          output += `\n\n◆ ${m.headingPath} (lines ${m.range.start}-${m.range.end})`;
-        }
-        output += `\n${m.context}`;
-      });
-    } else if (r.preview) {
-      output += `\n\n${r.preview}`;
-    }
+      if (r.matches) {
+        r.matches.forEach((m) => {
+          if (m.headingPath) {
+            output += `\n\n◆ ${m.headingPath} (lines ${m.range.start}-${m.range.end})`;
+          }
+          output += `\n${m.context}`;
+        });
+      } else if (r.preview) {
+        output += `\n\n${r.preview}`;
+      }
 
-    return output;
-  }).join('\n');
+      return output;
+    })
+    .join('\n');
 }
 
+// ============================================================================
 // Main CLI
+// ============================================================================
+
 program
   .name('ccmds')
-  .description('Claude Code Markdown Search - CLI for efficient document querying')
-  .version('1.0.0');
+  .description(
+    'Claude Code Markdown Search - CLI for efficient document querying'
+  )
+  .version('1.0.3')
+  .option('--config <path>', 'Path to config file')
+  .option('--no-config', 'Ignore config file')
+  .option('--no-cache', 'Skip cache for this command');
 
 program
   .command('grep')
   .description('Search for exact text patterns (regex supported)')
   .argument('<query>', 'Search query (regex pattern)')
-  .argument('[directories...]', 'Directories to search (default: current directory)')
+  .argument('[directories...]', 'Directories to search')
   .option('-c, --context <lines>', 'Lines of context around matches', '2')
   .option('-s, --case-sensitive', 'Case sensitive search', false)
-  .option('-o, --output <mode>', 'Output mode: detailed, compact, files, json', 'compact')
+  .option('-o, --output <mode>', 'Output mode: detailed, compact, files, json')
   .option('-r, --raw', 'Disable smart context (use line-based context)', false)
+  .option('-l, --limit <number>', 'Maximum files to return')
+  .option('-e, --exclude <patterns...>', 'Exclude patterns (glob syntax)')
+  .option('--doc <name>', 'Search only in named documentation (prefix match)')
   .action((query, directories, options) => {
-    const dirs = directories.length ? directories : ['.'];
-    const files = findMarkdownFilesFromDirs(dirs);
-    const results = grepSearch(files, query, {
-      context: parseInt(options.context),
-      caseSensitive: options.caseSensitive,
-      raw: options.raw
-    });
+    const globalOpts = program.opts();
+    const config = loadConfig(globalOpts);
+    const dirs = resolveDirectories(directories, config, options.doc);
+    const outputMode = options.output || config.outputMode;
 
-    console.log(formatOutput(results, options.output));
-    console.log(`\n✓ Found ${results.length} file(s) with matches`);
+    // Merge exclude patterns from CLI and config
+    const excludePatterns = [
+      ...(config.exclude || []),
+      ...(options.exclude || []),
+    ];
+
+    // Check cache (use resolved paths for cache key)
+    const cacheKey = generateCacheKey('grep', {
+      query,
+      dirs: dirs.map(d => d.resolvedPath).sort(),
+      caseSensitive: options.caseSensitive,
+      exclude: excludePatterns.sort(),
+    });
+    let results = getCachedResult(config, cacheKey);
+
+    if (!results) {
+      const files = findMarkdownFilesFromDirs(dirs, {
+        exclude: excludePatterns,
+        extensions: config.extensions,
+      });
+
+      results = grepSearch(files, query, {
+        context: parseInt(options.context),
+        caseSensitive: options.caseSensitive,
+        raw: options.raw,
+        config,
+      });
+
+      setCachedResult(config, cacheKey, 'grep', results);
+    }
+
+    // Apply limit if specified
+    const limit = options.limit ? parseInt(options.limit) : null;
+    const limitedResults = limit ? results.slice(0, limit) : results;
+
+    console.log(formatOutput(limitedResults, outputMode));
+    console.log(`\n✓ Found ${results.length} file(s) with matches${limit && results.length > limit ? ` (showing ${limit})` : ''}`);
   });
 
 program
   .command('find')
   .description('Fuzzy search for relevant documents')
   .argument('<query>', 'Search query')
-  .argument('[directories...]', 'Directories to search (default: current directory)')
-  .option('-l, --limit <number>', 'Maximum results to return', '10')
-  .option('-o, --output <mode>', 'Output mode: detailed, compact, files, json', 'compact')
-  .option('-r, --raw', 'Disable adaptive previews and frontmatter filtering', false)
+  .argument('[directories...]', 'Directories to search')
+  .option('-l, --limit <number>', 'Maximum results to return')
+  .option('-o, --output <mode>', 'Output mode: detailed, compact, files, json')
+  .option(
+    '-r, --raw',
+    'Disable adaptive previews and frontmatter filtering',
+    false
+  )
+  .option('-e, --exclude <patterns...>', 'Exclude patterns (glob syntax)')
+  .option('--doc <name>', 'Search only in named documentation (prefix match)')
   .action((query, directories, options) => {
-    const dirs = directories.length ? directories : ['.'];
-    const files = findMarkdownFilesFromDirs(dirs);
-    const results = fuzzySearch(files, query, {
-      limit: parseInt(options.limit),
-      raw: options.raw
-    });
+    const globalOpts = program.opts();
+    const config = loadConfig(globalOpts);
+    const dirs = resolveDirectories(directories, config, options.doc);
+    const outputMode = options.output || config.outputMode;
+    const limit = options.limit ? parseInt(options.limit) : config.limit;
 
-    console.log(formatOutput(results, options.output));
+    // Merge exclude patterns from CLI and config
+    const excludePatterns = [
+      ...(config.exclude || []),
+      ...(options.exclude || []),
+    ];
+
+    // Check cache (use resolved paths for cache key)
+    const cacheKey = generateCacheKey('find', {
+      query,
+      dirs: dirs.map(d => d.resolvedPath).sort(),
+      limit,
+      exclude: excludePatterns.sort(),
+    });
+    let results = getCachedResult(config, cacheKey);
+
+    if (!results) {
+      const files = findMarkdownFilesFromDirs(dirs, {
+        exclude: excludePatterns,
+        extensions: config.extensions,
+      });
+
+      results = fuzzySearch(files, query, {
+        limit,
+        raw: options.raw,
+        config,
+      });
+
+      setCachedResult(config, cacheKey, 'find', results);
+    }
+
+    console.log(formatOutput(results, outputMode));
     console.log(`\n✓ Found ${results.length} relevant document(s)`);
   });
 
 program
   .command('list')
   .description('List all markdown files')
-  .argument('[directories...]', 'Directories to search (default: current directory)')
+  .argument('[directories...]', 'Directories to search')
   .option('-c, --count', 'Show only count', false)
+  .option('-e, --exclude <patterns...>', 'Exclude patterns (glob syntax)')
+  .option('--doc <name>', 'List only from named documentation (prefix match)')
   .action((directories, options) => {
-    const dirs = directories.length ? directories : ['.'];
-    const files = findMarkdownFilesFromDirs(dirs);
+    const globalOpts = program.opts();
+    const config = loadConfig(globalOpts);
+    const dirs = resolveDirectories(directories, config, options.doc);
+
+    // Merge exclude patterns from CLI and config
+    const excludePatterns = [
+      ...(config.exclude || []),
+      ...(options.exclude || []),
+    ];
+
+    const files = findMarkdownFilesFromDirs(dirs, {
+      exclude: excludePatterns,
+      extensions: config.extensions,
+    });
 
     if (options.count) {
       console.log(files.length);
     } else {
-      files.forEach(f => console.log(f.relativePath));
+      files.forEach((f) => console.log(f.relativePath));
     }
   });
 
@@ -436,12 +1255,24 @@ program
 program
   .command('outline')
   .description('Show document structure (headings only)')
-  .argument('[paths...]', 'File or directory paths (default: current directory)')
+  .argument('[paths...]', 'File or directory paths')
   .option('-d, --depth <number>', 'Maximum heading depth', '6')
   .option('-o, --output <mode>', 'Output mode: text, json', 'text')
+  .option('-e, --exclude <patterns...>', 'Exclude patterns (glob syntax)')
+  .option('--doc <name>', 'Show outline only from named documentation (prefix match)')
   .action((paths, options) => {
+    const globalOpts = program.opts();
+    const config = loadConfig(globalOpts);
     const maxDepth = parseInt(options.depth);
-    const targetPaths = paths.length ? paths : ['.'];
+    // When paths provided, use them directly; otherwise use config entries
+    const dirs = paths.length ? null : resolveDirectories([], config, options.doc);
+    const targetPaths = paths.length ? paths : dirs.map(d => d.resolvedPath);
+
+    // Merge exclude patterns from CLI and config
+    const excludePatterns = [
+      ...(config.exclude || []),
+      ...(options.exclude || []),
+    ];
 
     for (const targetPath of targetPaths) {
       try {
@@ -450,31 +1281,46 @@ program
         if (stat.isFile()) {
           const parsed = parseMarkdownFile(targetPath);
           const lines = parsed.body.split('\n');
-          const headings = extractHeadings(lines).filter(h => h.level <= maxDepth);
+          const headings = extractHeadings(lines).filter(
+            (h) => h.level <= maxDepth
+          );
 
           if (options.output === 'json') {
-            console.log(JSON.stringify({ file: targetPath, headings }, null, 2));
+            console.log(JSON.stringify({ file: targetPath, headings }));
           } else {
             console.log(`📄 ${targetPath}`);
-            headings.forEach(h => {
-              console.log(`${'  '.repeat(h.level - 1)}${'#'.repeat(h.level)} ${h.text}`);
+            headings.forEach((h) => {
+              console.log(
+                `${'  '.repeat(h.level - 1)}${'#'.repeat(h.level)} ${h.text}`
+              );
             });
           }
         } else {
-          const files = findMarkdownFiles(targetPath, targetPath);
-          files.forEach(file => {
+          const files = findMarkdownFiles(targetPath, targetPath, {
+            exclude: excludePatterns,
+            extensions: config.extensions,
+          });
+          files.forEach((file) => {
             const parsed = parseMarkdownFile(file.path);
             const lines = parsed.body.split('\n');
-            const headings = extractHeadings(lines).filter(h => h.level <= maxDepth);
-            // Prefix with directory when multiple paths
-            const displayPath = targetPaths.length > 1 ? join(targetPath, file.relativePath) : file.relativePath;
+            const headings = extractHeadings(lines).filter(
+              (h) => h.level <= maxDepth
+            );
+            // Format path based on config
+            const displayPath = formatOutputPath(
+              file.path,
+              file.relativePath,
+              config
+            );
 
             if (options.output === 'json') {
               console.log(JSON.stringify({ file: displayPath, headings }));
             } else {
               console.log(`\n📄 ${displayPath}`);
-              headings.forEach(h => {
-                console.log(`${'  '.repeat(h.level - 1)}${'#'.repeat(h.level)} ${h.text}`);
+              headings.forEach((h) => {
+                console.log(
+                  `${'  '.repeat(h.level - 1)}${'#'.repeat(h.level)} ${h.text}`
+                );
               });
             }
           });
@@ -489,7 +1335,10 @@ program
   .command('section')
   .description('Extract a specific section by heading')
   .argument('<file>', 'Markdown file path')
-  .argument('<heading>', 'Heading text or path (e.g., "Installation" or "Setup > Prerequisites")')
+  .argument(
+    '<heading>',
+    'Heading text or path (e.g., "Installation" or "Setup > Prerequisites")'
+  )
   .option('-o, --output <mode>', 'Output mode: text, json', 'text')
   .action((file, heading, options) => {
     const parsed = parseMarkdownFile(file);
@@ -503,13 +1352,180 @@ program
     }
 
     if (options.output === 'json') {
-      console.log(JSON.stringify({
-        file,
-        heading,
-        content: sectionContent
-      }, null, 2));
+      console.log(JSON.stringify({ file, heading, content: sectionContent }));
     } else {
       console.log(sectionContent);
+    }
+  });
+
+program
+  .command('init')
+  .description('Create a configuration file in the current directory')
+  .option('-f, --force', 'Overwrite existing config file', false)
+  .option('-d, --directories <dirs...>', 'Default directories to search')
+  .action((options) => {
+    const configPath = join(process.cwd(), '.ccmdsrc');
+
+    if (existsSync(configPath) && !options.force) {
+      console.error(`Config file already exists: ${configPath}`);
+      console.error('Use --force to overwrite');
+      process.exit(1);
+    }
+
+    const configContent = generateDefaultConfig({
+      directories: options.directories,
+    });
+
+    writeFileSync(configPath, configContent, 'utf-8');
+    console.log(`Created config file: ${configPath}`);
+    console.log('\nYou can customize this file to:');
+    console.log('  - Set default search directories');
+    console.log('  - Add exclude patterns');
+    console.log('  - Configure fuzzy search settings');
+    console.log('  - Define command aliases');
+  });
+
+program
+  .command('config')
+  .description('Show current configuration')
+  .option('-p, --path', 'Show only config file path', false)
+  .option('-o, --output <mode>', 'Output mode: text, json', 'text')
+  .action((options) => {
+    const globalOpts = program.opts();
+    const config = loadConfig(globalOpts);
+
+    if (options.path) {
+      if (config._source === 'defaults') {
+        console.log('No config file found (using defaults)');
+      } else {
+        console.log(config._source);
+      }
+      return;
+    }
+
+    // Clean config for display (remove internal keys)
+    const displayConfig = { ...config };
+    delete displayConfig._source;
+    delete displayConfig._configDir;
+
+    if (options.output === 'json') {
+      console.log(JSON.stringify(displayConfig, null, 2));
+    } else {
+      console.log('Current Configuration:');
+      console.log('─'.repeat(40));
+
+      if (config._source && config._source !== 'defaults') {
+        console.log(`Source: ${config._source}`);
+      } else {
+        console.log('Source: defaults (no config file)');
+      }
+
+      console.log(
+        '\nDirectories:',
+        displayConfig.documentDirectories.join(', ')
+      );
+      console.log('Output mode:', displayConfig.outputMode);
+      console.log('Path format:', displayConfig.pathFormat || 'cwd');
+      console.log('Result limit:', displayConfig.limit);
+      console.log('Extensions:', displayConfig.extensions.join(', '));
+
+      if (displayConfig.exclude.length > 0) {
+        console.log('Exclude patterns:');
+        displayConfig.exclude.forEach((p) => console.log(`  - ${p}`));
+      }
+
+      if (Object.keys(displayConfig.aliases).length > 0) {
+        console.log('\nAliases:');
+        Object.entries(displayConfig.aliases).forEach(([name, cmd]) => {
+          console.log(`  ${name}: ${cmd}`);
+        });
+      }
+
+      console.log('\nFuzzy search:');
+      console.log(`  Threshold: ${displayConfig.fuzzy.threshold}`);
+
+      console.log('\nPreview lengths:');
+      console.log(
+        `  Top results (1-3): ${displayConfig.preview.topResults} chars`
+      );
+      console.log(
+        `  Mid results (4-7): ${displayConfig.preview.midResults} chars`
+      );
+      console.log(
+        `  Other results: ${displayConfig.preview.otherResults} chars`
+      );
+
+      console.log('\nCache:');
+      console.log(`  Enabled: ${displayConfig.cache?.enabled || false}`);
+      console.log(`  TTL: ${displayConfig.cache?.ttl || 300} seconds`);
+      console.log(`  Max entries: ${displayConfig.cache?.maxEntries || 50}`);
+    }
+  });
+
+program
+  .command('cache')
+  .description('Manage search result cache')
+  .argument('[action]', 'Action: clear, stats (default: stats)')
+  .action((action = 'stats') => {
+    const globalOpts = program.opts();
+    const config = loadConfig(globalOpts);
+
+    if (action === 'clear') {
+      const count = clearCache(config);
+      console.log(`Cleared ${count} cached entries`);
+    } else if (action === 'stats') {
+      const stats = getCacheStats(config);
+      console.log('Cache Statistics:');
+      console.log('─'.repeat(40));
+      console.log(`Enabled: ${stats.enabled}`);
+      console.log(`Cache file: ${stats.path}`);
+      console.log(`File exists: ${stats.exists}`);
+      console.log(`Total entries: ${stats.totalEntries}`);
+      console.log(`Valid entries: ${stats.validEntries}`);
+      console.log(`Expired entries: ${stats.expiredEntries}`);
+      if (Object.keys(stats.commands).length > 0) {
+        console.log('\nEntries by command:');
+        Object.entries(stats.commands).forEach(([cmd, count]) => {
+          console.log(`  ${cmd}: ${count}`);
+        });
+      }
+    } else {
+      console.error(`Unknown cache action: ${action}`);
+      console.error('Available actions: clear, stats');
+      process.exit(1);
+    }
+  });
+
+program
+  .command('docs')
+  .description('List all configured documentation directories')
+  .option('-o, --output <mode>', 'Output mode: text, json', 'text')
+  .action((options) => {
+    const globalOpts = program.opts();
+    const config = loadConfig(globalOpts);
+    const entries = resolveDirectories(null, config);
+
+    if (options.output === 'json') {
+      console.log(JSON.stringify(entries.map(e => ({
+        name: e.name,
+        path: e.path,
+        description: e.description,
+      }))));
+    } else {
+      if (entries.length === 0) {
+        console.log('No documentation directories configured.');
+        console.log('Add directories to your .ccmdsrc file or run: ccmds init -d ./docs');
+        return;
+      }
+      console.log('Configured Documentations:\n');
+      entries.forEach((e) => {
+        console.log(`  ${e.name}`);
+        console.log(`    Path: ${e.path}`);
+        if (e.description) {
+          console.log(`    ${e.description}`);
+        }
+        console.log();
+      });
     }
   });
 
@@ -530,8 +1546,14 @@ if (isMainModule()) {
 
 // Export for testing
 export {
+  // File discovery
   findMarkdownFiles,
   findMarkdownFilesFromDirs,
+  shouldExclude,
+  matchGlobPattern,
+  matchSegment,
+
+  // Parsing
   parseMarkdownFile,
   extractHeadings,
   findParentHeading,
@@ -539,9 +1561,34 @@ export {
   extractSmartContext,
   filterFrontmatter,
   extractSection,
+
+  // Search
   grepSearch,
   fuzzySearch,
   formatOutput,
+
+  // Configuration
+  DEFAULT_CONFIG,
+  CONFIG_FILE_NAMES,
+  findConfigFile,
+  loadConfigFile,
+  loadConfig,
+  mergeConfig,
+  resolveDirectories,
+  normalizeDocumentDirectories,
+  generateDefaultConfig,
+
+  // Cache
+  generateCacheKey,
+  getCacheFilePath,
+  readCache,
+  writeCache,
+  getCachedResult,
+  setCachedResult,
+  clearCache,
+  getCacheStats,
+
+  // CLI
   program,
-  USEFUL_FRONTMATTER
+  USEFUL_FRONTMATTER,
 };

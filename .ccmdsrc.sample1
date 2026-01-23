@@ -1,0 +1,11 @@
+{
+  "documentDirectories": ["./docs"],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    ".*/**"
+  ],
+  "outputMode": "json",
+  "limit": 10,
+  "extensions": [".md", ".markdown"]
+}
