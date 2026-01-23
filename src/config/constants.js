@@ -44,7 +44,7 @@ export const DEFAULT_CONFIG = {
   },
   index: {
     enabled: true,
-    path: '.ccmds-fuse-index.json',
+    path: '.ccmds-index.db',
     autoRebuild: true,
   },
 };

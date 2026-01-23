@@ -7,12 +7,14 @@ export {
   getIndexFilePath,
   getIndexMetaPath,
   getDocumentCachePath,
+  getFlexSearchExportPath,
   computeFileHash,
   computeFileHashes,
   isIndexFresh,
   buildFuseKeys,
+  buildFlexSearchFields,
   buildOrLoadIndex,
   clearIndexCache,
   clearDocumentCache,
   getIndexStats,
-} from './fuse-index.js';
+} from './flexsearch-index.js';

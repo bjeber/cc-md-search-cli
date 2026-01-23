@@ -119,8 +119,8 @@ The CLI looks for config files in this order:
 | `cache.enabled` | `boolean` | `false` | Enable result caching |
 | `cache.ttl` | `number` | `300` | Cache expiration in seconds |
 | `cache.maxEntries` | `number` | `50` | Maximum cached queries |
-| `index.enabled` | `boolean` | `true` | Enable Fuse.js index caching |
-| `index.path` | `string` | `".ccmds-fuse-index.json"` | Index file location |
+| `index.enabled` | `boolean` | `true` | Enable FlexSearch index caching |
+| `index.path` | `string` | `".ccmds-flexsearch/"` | Index directory location |
 | `index.autoRebuild` | `boolean` | `true` | Auto-rebuild when files change |
 
 ---
@@ -404,11 +404,11 @@ Cache is stored in `.ccmds-cache.json` in the project root.
 
 ## Search Index (Performance)
 
-The CLI automatically caches the Fuse.js search index to dramatically improve search performance (60-80% faster on subsequent searches).
+The CLI automatically caches the FlexSearch index to dramatically improve search performance (60-80% faster on subsequent searches).
 
 ### How It Works
 
-1. **First search**: Builds index, saves to `.ccmds-fuse-index.json`
+1. **First search**: Builds index, saves to `.ccmds-flexsearch/` directory
 2. **Subsequent searches**: Loads cached index if files haven't changed
 3. **Auto-invalidation**: Detects file changes via mtime hashes
 
@@ -418,7 +418,7 @@ The CLI automatically caches the Fuse.js search index to dramatically improve se
 {
   "index": {
     "enabled": true,
-    "path": ".ccmds-fuse-index.json",
+    "path": ".ccmds-flexsearch/",
     "autoRebuild": true
   }
 }
@@ -427,7 +427,7 @@ The CLI automatically caches the Fuse.js search index to dramatically improve se
 | Option | Default | Description |
 |--------|---------|-------------|
 | `enabled` | `true` | Enable index caching |
-| `path` | `".ccmds-fuse-index.json"` | Index file location |
+| `path` | `".ccmds-flexsearch/"` | Index directory location |
 | `autoRebuild` | `true` | Automatically rebuild when files change |
 
 ### Index Commands
@@ -449,37 +449,33 @@ ccmds index rebuild
 ccmds find "query" --rebuild-index
 ```
 
-### Fuse.js Performance Tuning
+### Clear Cache Before Search
 
-The default configuration includes performance optimizations:
-
-```json
-{
-  "fuzzy": {
-    "threshold": 0.4,
-    "ignoreLocation": true,
-    "ignoreFieldNorm": true,
-    "distance": 100
-  }
-}
+```bash
+ccmds find "query" --clear-cache
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `ignoreLocation` | `true` | Skip location calculations (+15% speed) |
-| `ignoreFieldNorm` | `true` | Skip field length normalization (+10% speed) |
-| `distance` | `100` | Max character distance for matching |
+### Query Operators
+
+FlexSearch supports extended query operators:
+
+| Operator | Example | Description |
+|----------|---------|-------------|
+| (default) | `auth` | Fuzzy/prefix match |
+| `'term` | `'authentication` | Exact substring match |
+| `!term` | `!deprecated` | Exclude results containing term |
+| space | `auth api` | AND search (both terms required) |
 
 ### Files Created
 
-- `.ccmds-fuse-index.json` - Serialized Fuse.js index
-- `.ccmds-fuse-index-meta.json` - File hashes for invalidation
+- `.ccmds-flexsearch/` - FlexSearch index directory containing:
+  - `meta.json` - Metadata with version, timestamp, and file hashes
+  - Multiple `.json` segment files - Indexed document data
 
-Add these to `.gitignore`:
+Add to `.gitignore`:
 
 ```
-.ccmds-fuse-index.json
-.ccmds-fuse-index-meta.json
+.ccmds-flexsearch/
 .ccmds-cache.json
 ```
 

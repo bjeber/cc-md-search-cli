@@ -1,37 +1,118 @@
 /**
- * Fuzzy search implementation
+ * Fuzzy search implementation using FlexSearch
  */
 
 import { DEFAULT_CONFIG } from '../config/constants.js';
 import { filterFrontmatter } from '../parsing/markdown.js';
 import { extractSmartContext } from '../parsing/context.js';
-import { buildOrLoadIndex } from '../index-persistence/fuse-index.js';
+import { buildOrLoadIndex } from '../index-persistence/flexsearch-index.js';
 
 // Minimum preview length threshold for short context extension
 const MIN_PREVIEW_LENGTH = 80;
 
 /**
- * Find the best (longest) match from Fuse.js indices
- * Fuse.js returns many small indices for fuzzy matches; we want the most significant one
- * @param {Array<[number, number]>} indices - Array of [start, end] pairs
- * @returns {{start: number, end: number, length: number} | null} - Best match position
+ * Parse extended search query into terms
+ * Supports Fuse.js-style operators:
+ * - 'term - exact substring match
+ * - !term - exclude results containing term
+ * - space - AND (all terms must match)
+ *
+ * @param {string} query - Raw query string
+ * @returns {{includes: string[], excludes: string[], exact: string[]}}
  */
-export function findBestMatchFromIndices(indices) {
-  if (!indices || indices.length === 0) {
-    return null;
-  }
+function parseExtendedQuery(query) {
+  const includes = [];
+  const excludes = [];
+  const exact = [];
 
-  // Find the longest match span
-  let bestMatch = { start: indices[0][0], end: indices[0][1], length: indices[0][1] - indices[0][0] };
+  // Split by spaces but preserve quoted strings
+  const parts = query.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
 
-  for (const [start, end] of indices) {
-    const length = end - start;
-    if (length > bestMatch.length) {
-      bestMatch = { start, end, length };
+  for (const part of parts) {
+    if (part.startsWith("'")) {
+      // Exact match - remove the prefix
+      exact.push(part.slice(1));
+    } else if (part.startsWith('!')) {
+      // Negation - remove the prefix
+      excludes.push(part.slice(1).toLowerCase());
+    } else {
+      // Normal search term
+      includes.push(part);
     }
   }
 
-  return bestMatch;
+  return { includes, excludes, exact };
+}
+
+/**
+ * Check if a document matches exact terms
+ * @param {object} doc - Document to check
+ * @param {string[]} exactTerms - Terms that must appear exactly
+ * @returns {boolean}
+ */
+function matchesExactTerms(doc, exactTerms) {
+  if (exactTerms.length === 0) return true;
+
+  const searchText = [
+    doc.title || '',
+    doc.body || '',
+    doc.description || '',
+    doc.tags || '',
+  ].join(' ');
+
+  return exactTerms.every(term =>
+    searchText.includes(term)
+  );
+}
+
+/**
+ * Check if a document matches exclusion terms
+ * @param {object} doc - Document to check
+ * @param {string[]} excludeTerms - Terms that must NOT appear
+ * @returns {boolean} - True if document should be excluded
+ */
+function matchesExcludeTerms(doc, excludeTerms) {
+  if (excludeTerms.length === 0) return false;
+
+  const searchText = [
+    doc.file || '',
+    doc.title || '',
+    doc.body || '',
+    doc.description || '',
+    doc.tags || '',
+  ].join(' ').toLowerCase();
+
+  return excludeTerms.some(term =>
+    searchText.includes(term)
+  );
+}
+
+/**
+ * Find position of query term in text (for preview generation)
+ * @param {string} text - Text to search
+ * @param {string} query - Query to find
+ * @returns {{start: number, end: number, length: number} | null}
+ */
+function findTermPosition(text, query) {
+  if (!text || !query) return null;
+
+  const textLower = text.toLowerCase();
+  const terms = query.toLowerCase().split(/\s+/).filter(t => !t.startsWith('!') && !t.startsWith("'"));
+
+  // Find the first matching term
+  for (const term of terms) {
+    const cleanTerm = term.replace(/^['!]/, '');
+    const index = textLower.indexOf(cleanTerm);
+    if (index !== -1) {
+      return {
+        start: index,
+        end: index + cleanTerm.length,
+        length: cleanTerm.length,
+      };
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -172,6 +253,41 @@ function extractTitleMatchPreview(body, title, maxLines = 10) {
 }
 
 /**
+ * Calculate a simple relevance score based on where matches are found
+ * @param {object} doc - Document object
+ * @param {string[]} terms - Search terms
+ * @returns {number} - Score (lower is better, like Fuse.js)
+ */
+function calculateScore(doc, terms) {
+  if (terms.length === 0) return 1;
+
+  let score = 1;
+  const titleLower = (doc.title || '').toLowerCase();
+  const bodyLower = (doc.body || '').toLowerCase();
+  const descLower = (doc.description || '').toLowerCase();
+  const tagsLower = (doc.tags || '').toLowerCase();
+
+  for (const term of terms) {
+    const cleanTerm = term.toLowerCase().replace(/^['!]/, '');
+
+    // Title matches are most important
+    if (titleLower.includes(cleanTerm)) {
+      score *= 0.1;
+    }
+    // Description and tags are next
+    else if (descLower.includes(cleanTerm) || tagsLower.includes(cleanTerm)) {
+      score *= 0.3;
+    }
+    // Body matches are least weighted
+    else if (bodyLower.includes(cleanTerm)) {
+      score *= 0.6;
+    }
+  }
+
+  return Math.min(score, 0.99);
+}
+
+/**
  * Fuzzy search for finding relevant documents
  * @param {Array} files - Array of file objects to search
  * @param {string} query - Search query
@@ -187,13 +303,112 @@ export function fuzzySearch(files, query, options) {
   const previewConfig = config.preview || DEFAULT_CONFIG.preview;
   const forceRebuild = options.rebuildIndex || false;
 
-  // Use cached index when possible
-  const { fuse } = buildOrLoadIndex(files, config, forceRebuild);
+  // Parse extended search syntax
+  const { includes, excludes, exact } = parseExtendedQuery(query);
 
-  // Pass limit directly to Fuse.js to avoid scoring all matches
-  const results = fuse.search(query, { limit: options.limit });
+  // Build search query for FlexSearch (use includes only)
+  const searchQuery = includes.join(' ');
+
+  // Use cached index when possible
+  const { index, documents } = buildOrLoadIndex(files, config, forceRebuild);
+
+  // If no search query and no exact terms, return empty
+  if (!searchQuery && exact.length === 0) {
+    return [];
+  }
+
+  let results;
+
+  if (searchQuery) {
+    // Split query into individual words for AND search
+    const searchTerms = searchQuery.split(/\s+/).filter(t => t.length > 0);
+
+    if (searchTerms.length === 0) {
+      results = [];
+    } else if (searchTerms.length === 1) {
+      // Single term - simple search
+      const searchResults = index.search(searchTerms[0], {
+        limit: options.limit * 3,
+        enrich: true,
+      });
+
+      const docMap = new Map();
+      for (const fieldResult of searchResults) {
+        if (fieldResult.result) {
+          for (const item of fieldResult.result) {
+            if (!docMap.has(item.id)) {
+              docMap.set(item.id, item.doc);
+            }
+          }
+        }
+      }
+      results = Array.from(docMap.values());
+    } else {
+      // Multiple terms - AND search (intersection of results)
+      let intersectionIds = null;
+      const docById = new Map();
+
+      for (const term of searchTerms) {
+        const termResults = index.search(term, {
+          limit: 1000, // Get all matches for intersection
+          enrich: true,
+        });
+
+        const termIds = new Set();
+        for (const fieldResult of termResults) {
+          if (fieldResult.result) {
+            for (const item of fieldResult.result) {
+              termIds.add(item.id);
+              if (!docById.has(item.id)) {
+                docById.set(item.id, item.doc);
+              }
+            }
+          }
+        }
+
+        if (intersectionIds === null) {
+          intersectionIds = termIds;
+        } else {
+          // Intersect: keep only IDs that appear in both sets
+          intersectionIds = new Set([...intersectionIds].filter(id => termIds.has(id)));
+        }
+      }
+
+      results = intersectionIds
+        ? Array.from(intersectionIds).map(id => docById.get(id)).filter(Boolean)
+        : [];
+    }
+  } else {
+    // Only exact terms, search all documents
+    results = documents;
+  }
+
+  // Apply exact match filter
+  if (exact.length > 0) {
+    results = results.filter(doc => matchesExactTerms(doc, exact));
+  }
+
+  // Apply exclusion filter
+  if (excludes.length > 0) {
+    results = results.filter(doc => !matchesExcludeTerms(doc, excludes));
+  }
+
+  // Calculate scores and sort
+  const allTerms = [...includes, ...exact];
+  results = results.map(doc => ({
+    doc,
+    score: calculateScore(doc, allTerms),
+  }));
+
+  // Sort by score (lower is better)
+  results.sort((a, b) => a.score - b.score);
+
+  // Apply limit
+  results = results.slice(0, options.limit);
 
   return results.map((result, index) => {
+    const doc = result.doc;
+
     // Adaptive preview length based on rank (configurable)
     const previewLength = options.raw
       ? 200
@@ -206,30 +421,33 @@ export function fuzzySearch(files, query, options) {
     let preview = '';
     const maxLines = previewConfig.maxLines || 20;
 
-    // Check if match is in title field
-    const titleMatch = result.matches?.find(m => m.key === 'title');
-    const bodyMatch = result.matches?.find(m => m.key === 'body');
+    // Check if query matches title
+    const queryLower = query.toLowerCase();
+    const titleLower = (doc.title || '').toLowerCase();
+    const isTitleMatch = allTerms.some(term =>
+      titleLower.includes(term.toLowerCase().replace(/^['!]/, ''))
+    );
 
-    if (titleMatch && (!bodyMatch || titleMatch.indices?.[0]?.[1] - titleMatch.indices?.[0]?.[0] >= 2)) {
+    // Find match position in body
+    const bodyMatch = findTermPosition(doc.body, query);
+
+    if (isTitleMatch && (!bodyMatch || bodyMatch.length < 3)) {
       // Title match: show title + following paragraph
-      preview = extractTitleMatchPreview(result.item.body, result.item.title, maxLines);
-    } else if (bodyMatch && bodyMatch.indices && bodyMatch.indices.length > 0) {
+      preview = extractTitleMatchPreview(doc.body, doc.title, maxLines);
+    } else if (bodyMatch && bodyMatch.length >= 2) {
       // Body match: extract paragraph context around the match
-      const bestMatch = findBestMatchFromIndices(bodyMatch.indices);
-      if (bestMatch && bestMatch.length >= 2) {
-        preview = extractParagraphContext(
-          result.item.body,
-          bestMatch.start,
-          maxLines
-        );
-      }
+      preview = extractParagraphContext(
+        doc.body,
+        bodyMatch.start,
+        maxLines
+      );
     }
 
     if (!preview) {
       // Fall back to description or body start
-      preview = result.item.description || '';
+      preview = doc.description || '';
       if (preview.length < previewLength) {
-        preview = result.item.body.substring(0, previewLength);
+        preview = doc.body.substring(0, previewLength);
       }
       if (preview.length >= previewLength) {
         preview =
@@ -237,14 +455,35 @@ export function fuzzySearch(files, query, options) {
       }
     }
 
+    // Parse frontmatter from doc (it's stored as JSON string in tags, actual frontmatter in frontmatter field)
+    const frontmatter = doc.frontmatter || {};
+
     return {
-      file: result.item.file,
+      file: doc.file,
       score: result.score,
-      title: result.item.title,
+      title: doc.title,
       frontmatter: options.raw
-        ? result.item.frontmatter
-        : filterFrontmatter(result.item.frontmatter, config),
+        ? frontmatter
+        : filterFrontmatter(frontmatter, config),
       preview,
     };
   });
+}
+
+// Legacy export for compatibility with tests that might use it
+export function findBestMatchFromIndices(indices) {
+  if (!indices || indices.length === 0) {
+    return null;
+  }
+
+  let bestMatch = { start: indices[0][0], end: indices[0][1], length: indices[0][1] - indices[0][0] };
+
+  for (const [start, end] of indices) {
+    const length = end - start;
+    if (length > bestMatch.length) {
+      bestMatch = { start, end, length };
+    }
+  }
+
+  return bestMatch;
 }

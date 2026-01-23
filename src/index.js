@@ -58,6 +58,7 @@ export {
   getIndexFilePath,
   getIndexMetaPath,
   getDocumentCachePath,
+  getFlexSearchExportPath,
   computeFileHash,
   computeFileHashes,
   isIndexFresh,

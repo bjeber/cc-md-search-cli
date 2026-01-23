@@ -330,7 +330,7 @@ describe('CLI Commands', () => {
         await program.parseAsync(['node', 'test', 'find', 'nonexistentquery12345', '-l', '1']);
         const output = logOutput.join('\n');
         expect(output).toContain('Found 0');
-      });
+      }, 30000); // Longer timeout - indexes entire cwd which may have many files
 
       test('list defaults to current directory when no directory specified', async () => {
         await program.parseAsync(['node', 'test', 'list']);

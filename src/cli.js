@@ -68,7 +68,8 @@ program
   )
   .option('--config <path>', 'Path to config file')
   .option('--no-config', 'Ignore config file')
-  .option('--no-cache', 'Skip cache for this command');
+  .option('--no-cache', 'Skip cache for this command')
+  .option('--clear-cache', 'Clear index cache before running command');
 
 program
   .command('grep')
@@ -85,6 +86,12 @@ program
   .action((query, directories, options) => {
     const globalOpts = program.opts();
     const config = loadConfig(globalOpts);
+
+    // Clear cache if requested
+    if (globalOpts.clearCache) {
+      clearIndexCache(config);
+    }
+
     const dirs = resolveDirectories(directories, config, options.doc);
     const outputMode = options.output || config.outputMode;
 
@@ -147,6 +154,12 @@ program
   .action((query, directories, options) => {
     const globalOpts = program.opts();
     const config = loadConfig(globalOpts);
+
+    // Clear cache if requested
+    if (globalOpts.clearCache) {
+      clearIndexCache(config);
+    }
+
     const dirs = resolveDirectories(directories, config, options.doc);
     const outputMode = options.output || config.outputMode;
     const limit = options.limit ? parseInt(options.limit) : config.limit;
@@ -176,7 +189,7 @@ program
         limit,
         raw: options.raw,
         config,
-        rebuildIndex: options.rebuildIndex,
+        rebuildIndex: options.rebuildIndex || globalOpts.clearCache,
       });
 
       setCachedResult(config, cacheKey, 'find', results);

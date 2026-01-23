@@ -22,7 +22,8 @@ describe('CLI Configuration Commands', () => {
     }
   });
 
-  for (const runtime of ['bun', 'node']) {
+  // Note: Node.js is not supported because we use bun:sqlite for persistence
+  for (const runtime of ['bun']) {
     describe(`init command (${runtime})`, () => {
       // Note: Tests run in non-TTY mode, so interactive mode is skipped automatically.
       // We also explicitly use --no-interactive for clarity.

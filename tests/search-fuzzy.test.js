@@ -1,5 +1,5 @@
-import { describe, test, expect } from 'bun:test';
-import { findMarkdownFiles, fuzzySearch } from '../src/cli.js';
+import { describe, test, expect, beforeEach } from 'bun:test';
+import { findMarkdownFiles, fuzzySearch, clearDocumentCache } from '../src/cli.js';
 import { FIXTURES_DIR } from './helpers/index.js';
 
 // ============================================================================
@@ -7,6 +7,11 @@ import { FIXTURES_DIR } from './helpers/index.js';
 // ============================================================================
 
 describe('fuzzySearch', () => {
+  beforeEach(() => {
+    // Clear in-memory cache between tests
+    clearDocumentCache();
+  });
+
   test('finds relevant documents', () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
     const results = fuzzySearch(files, 'testing documentation', {
@@ -105,10 +110,15 @@ describe('fuzzySearch', () => {
 });
 
 // ============================================================================
-// EXTENDED SEARCH (Fuse.js Extended Search)
+// EXTENDED SEARCH (FlexSearch Extended Search)
 // ============================================================================
 
 describe('fuzzySearch - Extended Search', () => {
+  beforeEach(() => {
+    // Clear in-memory cache between tests
+    clearDocumentCache();
+  });
+
   test('AND search: space-separated words must all match', () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
 
