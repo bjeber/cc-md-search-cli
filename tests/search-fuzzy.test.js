@@ -12,9 +12,9 @@ describe('fuzzySearch', () => {
     clearDocumentCache();
   });
 
-  test('finds relevant documents', () => {
+  test('finds relevant documents', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
-    const results = fuzzySearch(files, 'testing documentation', {
+    const results = await fuzzySearch(files, 'testing documentation', {
       limit: 10,
       raw: false
     });
@@ -22,9 +22,9 @@ describe('fuzzySearch', () => {
     expect(results.length).toBeGreaterThan(0);
   });
 
-  test('respects limit option', () => {
+  test('respects limit option', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
-    const results = fuzzySearch(files, 'content', {
+    const results = await fuzzySearch(files, 'content', {
       limit: 2,
       raw: false
     });
@@ -32,9 +32,9 @@ describe('fuzzySearch', () => {
     expect(results.length).toBeLessThanOrEqual(2);
   });
 
-  test('includes score in results', () => {
+  test('includes score in results', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
-    const results = fuzzySearch(files, 'frontmatter', {
+    const results = await fuzzySearch(files, 'frontmatter', {
       limit: 5,
       raw: false
     });
@@ -45,9 +45,9 @@ describe('fuzzySearch', () => {
     });
   });
 
-  test('returns title from frontmatter or filename', () => {
+  test('returns title from frontmatter or filename', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
-    const results = fuzzySearch(files, 'test', {
+    const results = await fuzzySearch(files, 'test', {
       limit: 10,
       raw: false
     });
@@ -57,9 +57,9 @@ describe('fuzzySearch', () => {
     });
   });
 
-  test('provides adaptive preview lengths', () => {
+  test('provides adaptive preview lengths', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
-    const results = fuzzySearch(files, 'test', {
+    const results = await fuzzySearch(files, 'test', {
       limit: 10,
       raw: false
     });
@@ -69,9 +69,9 @@ describe('fuzzySearch', () => {
     });
   });
 
-  test('truncates long previews with ellipsis', () => {
+  test('truncates long previews with ellipsis', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
-    const results = fuzzySearch(files, 'code', {
+    const results = await fuzzySearch(files, 'code', {
       limit: 10,
       raw: false
     });
@@ -81,9 +81,9 @@ describe('fuzzySearch', () => {
     expect(longPreviews.length).toBeGreaterThanOrEqual(0);
   });
 
-  test('raw mode uses fixed preview length', () => {
+  test('raw mode uses fixed preview length', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
-    const results = fuzzySearch(files, 'test', {
+    const results = await fuzzySearch(files, 'test', {
       limit: 10,
       raw: true
     });
@@ -93,9 +93,9 @@ describe('fuzzySearch', () => {
     });
   });
 
-  test('filters frontmatter in non-raw mode', () => {
+  test('filters frontmatter in non-raw mode', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
-    const results = fuzzySearch(files, 'Test Document', {
+    const results = await fuzzySearch(files, 'Test Document', {
       limit: 5,
       raw: false
     });
@@ -119,12 +119,12 @@ describe('fuzzySearch - Extended Search', () => {
     clearDocumentCache();
   });
 
-  test('AND search: space-separated words must all match', () => {
+  test('AND search: space-separated words must all match', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
 
     // "simple markdown" should match simple.md which contains both words
     // (simple in filename, markdown in body)
-    const results = fuzzySearch(files, 'simple markdown', {
+    const results = await fuzzySearch(files, 'simple markdown', {
       limit: 10,
       raw: false
     });
@@ -133,11 +133,11 @@ describe('fuzzySearch - Extended Search', () => {
     expect(results.some(r => r.file === 'simple.md')).toBe(true);
   });
 
-  test('AND search: returns nothing when not all words match', () => {
+  test('AND search: returns nothing when not all words match', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
 
     // "simple xyznonexistent" should not match anything
-    const results = fuzzySearch(files, 'simple xyznonexistent123', {
+    const results = await fuzzySearch(files, 'simple xyznonexistent123', {
       limit: 10,
       raw: false
     });
@@ -145,17 +145,17 @@ describe('fuzzySearch - Extended Search', () => {
     expect(results.length).toBe(0);
   });
 
-  test('AND search: multiple words narrow results', () => {
+  test('AND search: multiple words narrow results', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
 
     // Single word should find more results
-    const singleWord = fuzzySearch(files, 'test', {
+    const singleWord = await fuzzySearch(files, 'test', {
       limit: 10,
       raw: false
     });
 
     // Adding more words should be same or fewer results
-    const twoWords = fuzzySearch(files, 'test document', {
+    const twoWords = await fuzzySearch(files, 'test document', {
       limit: 10,
       raw: false
     });
@@ -163,11 +163,11 @@ describe('fuzzySearch - Extended Search', () => {
     expect(singleWord.length).toBeGreaterThanOrEqual(twoWords.length);
   });
 
-  test('exact include: single quote prefix for exact substring', () => {
+  test('exact include: single quote prefix for exact substring', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
 
     // "'simple" should find files with exact "simple" substring
-    const results = fuzzySearch(files, "'simple", {
+    const results = await fuzzySearch(files, "'simple", {
       limit: 10,
       raw: false
     });
@@ -176,11 +176,11 @@ describe('fuzzySearch - Extended Search', () => {
     expect(results.some(r => r.file === 'simple.md')).toBe(true);
   });
 
-  test('exact include: finds exact phrase in body', () => {
+  test('exact include: finds exact phrase in body', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
 
     // "'Test Document" should find the file with this exact title
-    const results = fuzzySearch(files, "'Test Document", {
+    const results = await fuzzySearch(files, "'Test Document", {
       limit: 10,
       raw: false
     });
@@ -189,11 +189,11 @@ describe('fuzzySearch - Extended Search', () => {
     expect(results.some(r => r.file === 'with-frontmatter.md')).toBe(true);
   });
 
-  test('AND with exact: combining exact operators', () => {
+  test('AND with exact: combining exact operators', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
 
     // "'Test 'Document" - both exact terms must match
-    const results = fuzzySearch(files, "'Test 'Document", {
+    const results = await fuzzySearch(files, "'Test 'Document", {
       limit: 10,
       raw: false
     });
@@ -203,17 +203,17 @@ describe('fuzzySearch - Extended Search', () => {
     expect(results.some(r => r.file === 'with-frontmatter.md')).toBe(true);
   });
 
-  test('exact include is stricter than fuzzy', () => {
+  test('exact include is stricter than fuzzy', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
 
     // Fuzzy search for partial word
-    const fuzzyResults = fuzzySearch(files, 'Documen', {
+    const fuzzyResults = await fuzzySearch(files, 'Documen', {
       limit: 10,
       raw: false
     });
 
     // Exact include for same partial - should find fewer or none
-    const exactResults = fuzzySearch(files, "'Documen", {
+    const exactResults = await fuzzySearch(files, "'Documen", {
       limit: 10,
       raw: false
     });
@@ -222,17 +222,17 @@ describe('fuzzySearch - Extended Search', () => {
     expect(exactResults.length).toBeLessThanOrEqual(fuzzyResults.length);
   });
 
-  test('negation with !term removes matches', () => {
+  test('negation with !term removes matches', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
 
     // Find all simple related
-    const withSimple = fuzzySearch(files, 'simple', {
+    const withSimple = await fuzzySearch(files, 'simple', {
       limit: 10,
       raw: false
     });
 
     // Exclude simple
-    const withoutSimple = fuzzySearch(files, 'content !simple', {
+    const withoutSimple = await fuzzySearch(files, 'content !simple', {
       limit: 10,
       raw: false
     });
@@ -245,11 +245,11 @@ describe('fuzzySearch - Extended Search', () => {
     expect(simpleInSecond).toBe(false);
   });
 
-  test('combined operators: exact + negation', () => {
+  test('combined operators: exact + negation', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
 
     // Find "document" but exclude "simple"
-    const results = fuzzySearch(files, "'document !simple", {
+    const results = await fuzzySearch(files, "'document !simple", {
       limit: 10,
       raw: false
     });
@@ -258,15 +258,15 @@ describe('fuzzySearch - Extended Search', () => {
     expect(results.some(r => r.file === 'simple.md')).toBe(false);
   });
 
-  test('multi-word search is more specific than single word', () => {
+  test('multi-word search is more specific than single word', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
 
-    const broad = fuzzySearch(files, 'document', {
+    const broad = await fuzzySearch(files, 'document', {
       limit: 10,
       raw: false
     });
 
-    const specific = fuzzySearch(files, 'test document frontmatter', {
+    const specific = await fuzzySearch(files, 'test document frontmatter', {
       limit: 10,
       raw: false
     });

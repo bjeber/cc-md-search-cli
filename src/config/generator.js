@@ -8,8 +8,13 @@
  * @returns {string} - JSON configuration content
  */
 export function generateDefaultConfig(options = {}) {
+  const directories = Array.isArray(options.directories)
+    ? options.directories
+    : options.directories
+      ? [options.directories]
+      : ['./docs'];
   const config = {
-    documentDirectories: options.directories || ['./docs'],
+    documentDirectories: directories,
     exclude: ['**/node_modules/**', '**/.*/**'],
     outputMode: 'json',
     limit: 10,

@@ -38,6 +38,7 @@ export function grepSearch(files, query, options) {
     const processedRanges = []; // For deduplication
 
     lines.forEach((line, index) => {
+      regex.lastIndex = 0; // Reset before each test
       if (regex.test(line)) {
         const { start, end } = options.raw
           ? {

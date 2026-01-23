@@ -6,7 +6,15 @@
  * All files stored in .ccmds-flexsearch/ directory
  */
 
-import { existsSync, statSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'fs';
+import {
+  existsSync,
+  statSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+} from 'fs';
 import { join } from 'path';
 import { createHash } from 'crypto';
 import { Document } from 'flexsearch';
@@ -134,7 +142,7 @@ function detectChanges(files, storedHashes) {
   const added = [];
   const unchanged = [];
 
-  const currentPaths = new Set(files.map(f => f.path));
+  const currentPaths = new Set(files.map((f) => f.path));
   const storedPaths = new Set(Object.keys(storedHashes));
 
   for (const file of files) {
@@ -151,7 +159,7 @@ function detectChanges(files, storedHashes) {
   }
 
   // Files in cache but not in current file list
-  const removed = [...storedPaths].filter(p => !currentPaths.has(p));
+  const removed = [...storedPaths].filter((p) => !currentPaths.has(p));
 
   return { changed, added, removed, unchanged };
 }
@@ -188,7 +196,15 @@ function createFlexSearchIndex(config) {
     document: {
       id: 'id',
       index: buildFlexSearchFields(weights),
-      store: ['file', 'title', 'body', 'description', 'tags', 'frontmatter', 'hash'],
+      store: [
+        'file',
+        'title',
+        'body',
+        'description',
+        'tags',
+        'frontmatter',
+        'hash',
+      ],
     },
   });
 }
@@ -201,9 +217,10 @@ function createFlexSearchIndex(config) {
  */
 function parseFileToDocument(file, hash) {
   const parsed = parseMarkdownFile(file.path);
-  const title = parsed.frontmatter.title
-    || extractFirstHeading(parsed.body)
-    || file.relativePath;
+  const title =
+    parsed.frontmatter.title ||
+    extractFirstHeading(parsed.body) ||
+    file.relativePath;
 
   return {
     id: file.path,
@@ -213,7 +230,7 @@ function parseFileToDocument(file, hash) {
     frontmatter: parsed.frontmatter,
     tags: Array.isArray(parsed.frontmatter.tags)
       ? parsed.frontmatter.tags.join(' ')
-      : (parsed.frontmatter.tags || ''),
+      : parsed.frontmatter.tags || '',
     description: parsed.frontmatter.description || '',
     hash,
   };
@@ -225,11 +242,12 @@ function parseFileToDocument(file, hash) {
  * @param {string} exportPath - Directory to export to
  * @param {object} meta - Metadata to save
  */
-function exportFlexSearchIndex(index, exportPath, meta) {
+async function exportFlexSearchIndex(index, exportPath, meta) {
   mkdirSync(exportPath, { recursive: true });
 
   // FlexSearch async export with sync file writes
-  index.export((key, data) => {
+  // Wait for all export chunks to complete
+  await index.export((key, data) => {
     writeFileSync(join(exportPath, `${key}.json`), data ?? '');
   });
 
@@ -249,7 +267,9 @@ function importFlexSearchIndex(config, exportPath, options = {}) {
 
   try {
     const index = createFlexSearchIndex(config);
-    const files = readdirSync(exportPath).filter(f => f.endsWith('.json') && f !== 'meta.json');
+    const files = readdirSync(exportPath).filter(
+      (f) => f.endsWith('.json') && f !== 'meta.json'
+    );
 
     if (files.length === 0) return null;
 
@@ -306,20 +326,33 @@ function loadDocumentsFromIndex(index, meta) {
  * @param {Array} files - Files to index
  * @param {object} config - Configuration object
  * @param {boolean|object} forceRebuildOrOptions - Force rebuild flag or options object
- * @returns {{index: Document, documents: Array}} - FlexSearch instance and documents
+ * @returns {Promise<{index: Document, documents: Array}>} - FlexSearch instance and documents
  */
-export function buildOrLoadIndex(files, config, forceRebuildOrOptions = false) {
-  const options = typeof forceRebuildOrOptions === 'object'
-    ? forceRebuildOrOptions
-    : { forceRebuild: forceRebuildOrOptions };
+export async function buildOrLoadIndex(files, config, forceRebuildOrOptions = false) {
+  const options =
+    typeof forceRebuildOrOptions === 'object'
+      ? forceRebuildOrOptions
+      : { forceRebuild: forceRebuildOrOptions };
   const { forceRebuild = false, silent = false } = options;
 
   const indexConfig = config.index || DEFAULT_CONFIG.index;
   const exportPath = getFlexSearchExportPath(config);
 
   // Check in-memory cache first
-  if (!forceRebuild && indexCache && (Date.now() - indexCacheTimestamp) < INDEX_CACHE_TTL) {
-    if (indexCache.documents.length === files.length) {
+  if (
+    !forceRebuild &&
+    indexCache &&
+    Date.now() - indexCacheTimestamp < INDEX_CACHE_TTL
+  ) {
+    const currentPaths = files
+      .map((f) => f.path)
+      .sort()
+      .join('\n');
+    const cachedPaths = indexCache.documents
+      .map((d) => d.id)
+      .sort()
+      .join('\n');
+    if (currentPaths === cachedPaths) {
       return { index: indexCache.index, documents: indexCache.documents };
     }
   }
@@ -328,7 +361,11 @@ export function buildOrLoadIndex(files, config, forceRebuildOrOptions = false) {
   if (!forceRebuild && indexConfig.enabled && existsSync(exportPath)) {
     const meta = loadMeta(exportPath);
 
-    if (meta && meta.version === INDEX_VERSION && meta.fileCount === files.length) {
+    if (
+      meta &&
+      meta.version === INDEX_VERSION &&
+      meta.fileCount === files.length
+    ) {
       // Quick check: compare hashes
       const storedHashes = meta.hashes || {};
       let allFresh = true;
@@ -345,10 +382,15 @@ export function buildOrLoadIndex(files, config, forceRebuildOrOptions = false) {
         const showProgress = !silent && files.length >= 100;
 
         if (showProgress) {
-          process.stderr.write(`Loading cached index (${files.length} files)...`);
+          process.stderr.write(
+            `Loading cached index (${files.length} files)...`
+          );
         }
 
-        const index = importFlexSearchIndex(config, exportPath, { silent, showProgress });
+        const index = importFlexSearchIndex(config, exportPath, {
+          silent,
+          showProgress,
+        });
 
         if (index) {
           const documents = loadDocumentsFromIndex(index, meta);
@@ -420,7 +462,7 @@ export function buildOrLoadIndex(files, config, forceRebuildOrOptions = false) {
     hashes,
   };
 
-  exportFlexSearchIndex(index, exportPath, meta);
+  await exportFlexSearchIndex(index, exportPath, meta);
 
   // Update in-memory cache
   indexCache = { index, documents };

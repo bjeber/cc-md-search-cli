@@ -16,20 +16,42 @@ import {
   directoryExists,
   expandTilde,
 } from './validators.js';
-import { createSpinner, printSuccess, printInfo, printWarning, theme } from './ui.js';
+import {
+  createSpinner,
+  printSuccess,
+  printInfo,
+  printWarning,
+  theme,
+} from './ui.js';
 
 /**
  * Common exclude patterns with descriptions
  */
 const COMMON_EXCLUDE_PATTERNS = [
-  { name: '**/node_modules/**', value: '**/node_modules/**', description: 'Node.js dependencies' },
+  {
+    name: '**/node_modules/**',
+    value: '**/node_modules/**',
+    description: 'Node.js dependencies',
+  },
   { name: '**/.*/**', value: '**/.*/**', description: 'Hidden directories' },
   { name: '**/dist/**', value: '**/dist/**', description: 'Build output' },
   { name: '**/build/**', value: '**/build/**', description: 'Build output' },
   { name: '**/.git/**', value: '**/.git/**', description: 'Git directory' },
-  { name: '**/vendor/**', value: '**/vendor/**', description: 'Vendor dependencies' },
-  { name: '**/__pycache__/**', value: '**/__pycache__/**', description: 'Python cache' },
-  { name: '**/coverage/**', value: '**/coverage/**', description: 'Test coverage' },
+  {
+    name: '**/vendor/**',
+    value: '**/vendor/**',
+    description: 'Vendor dependencies',
+  },
+  {
+    name: '**/__pycache__/**',
+    value: '**/__pycache__/**',
+    description: 'Python cache',
+  },
+  {
+    name: '**/coverage/**',
+    value: '**/coverage/**',
+    description: 'Test coverage',
+  },
 ];
 
 /**
@@ -48,9 +70,10 @@ const OUTPUT_MODES = [
  * @returns {Promise<string|{name: string, path: string, description?: string}>}
  */
 async function promptSingleDirectory(index) {
-  const pathPrompt = index === 1
-    ? 'Enter a documentation directory path'
-    : 'Enter another directory path';
+  const pathPrompt =
+    index === 1
+      ? 'Enter a documentation directory path'
+      : 'Enter another directory path';
 
   const path = await input({
     message: pathPrompt,
@@ -63,7 +86,7 @@ async function promptSingleDirectory(index) {
   const resolvedPath = resolve(expandedPath);
 
   // Check if directory exists
-  if (!directoryExists(trimmedPath)) {
+  if (!directoryExists(resolvedPath)) {
     const shouldCreate = await confirm({
       message: `Directory '${trimmedPath}' doesn't exist. Create it?`,
       default: true,
@@ -176,7 +199,7 @@ export async function promptExcludePatterns() {
 
   const selected = await checkbox({
     message: 'Select exclude patterns',
-    choices: COMMON_EXCLUDE_PATTERNS.map(p => ({
+    choices: COMMON_EXCLUDE_PATTERNS.map((p) => ({
       name: `${p.name} ${theme.muted(`(${p.description})`)}`,
       value: p.value,
       checked: false,

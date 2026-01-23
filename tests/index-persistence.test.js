@@ -55,7 +55,7 @@ describe('Index Persistence', () => {
   });
 
   describe('computeFileHash', () => {
-    test('returns consistent hash for same file', () => {
+    test('returns consistent hash for same file', async () => {
       const testFile = join(FIXTURES_DIR, 'simple.md');
       const hash1 = computeFileHash(testFile);
       const hash2 = computeFileHash(testFile);
@@ -64,14 +64,14 @@ describe('Index Persistence', () => {
       expect(hash1).toHaveLength(12);
     });
 
-    test('returns "missing" for non-existent file', () => {
+    test('returns "missing" for non-existent file', async () => {
       const hash = computeFileHash('/non/existent/file.md');
       expect(hash).toBe('missing');
     });
   });
 
   describe('computeFileHashes', () => {
-    test('computes hashes for all files', () => {
+    test('computes hashes for all files', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
       const hashes = computeFileHashes(files);
 
@@ -84,7 +84,7 @@ describe('Index Persistence', () => {
   });
 
   describe('getIndexFilePath / getIndexMetaPath', () => {
-    test('returns correct paths based on config', () => {
+    test('returns correct paths based on config', async () => {
       const indexPath = getIndexFilePath(tempConfig);
       const metaPath = getIndexMetaPath(tempConfig);
 
@@ -93,25 +93,25 @@ describe('Index Persistence', () => {
       expect(metaPath).toBe(join(tempDir, '.ccmds-flexsearch'));
     });
 
-    test('getFlexSearchExportPath returns flexsearch directory', () => {
+    test('getFlexSearchExportPath returns flexsearch directory', async () => {
       const exportPath = getFlexSearchExportPath(tempConfig);
       expect(exportPath).toBe(join(tempDir, '.ccmds-flexsearch'));
     });
   });
 
   describe('isIndexFresh', () => {
-    test('returns false when index does not exist', () => {
+    test('returns false when index does not exist', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
       const exportPath = join(tempDir, 'nonexistent');
 
       expect(isIndexFresh(exportPath, files)).toBe(false);
     });
 
-    test('returns false when file count changes', () => {
+    test('returns false when file count changes', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
 
       // First create a valid index
-      buildOrLoadIndex(files, tempConfig, { silent: true });
+      await buildOrLoadIndex(files, tempConfig, { silent: true });
 
       // Check it's fresh
       const exportPath = getFlexSearchExportPath(tempConfig);
@@ -124,18 +124,18 @@ describe('Index Persistence', () => {
   });
 
   describe('buildOrLoadIndex', () => {
-    test('creates index directory when enabled', () => {
+    test('creates index directory when enabled', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
       const exportPath = getFlexSearchExportPath(tempConfig);
 
       expect(existsSync(exportPath)).toBe(false);
 
-      buildOrLoadIndex(files, tempConfig, { silent: true });
+      await buildOrLoadIndex(files, tempConfig, { silent: true });
 
       expect(existsSync(exportPath)).toBe(true);
     });
 
-    test('does not create index directory when disabled', () => {
+    test('does not create index directory when disabled', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
       const disabledConfig = {
         ...tempConfig,
@@ -143,46 +143,46 @@ describe('Index Persistence', () => {
       };
       const exportPath = getFlexSearchExportPath(disabledConfig);
 
-      buildOrLoadIndex(files, disabledConfig, { silent: true });
+      await buildOrLoadIndex(files, disabledConfig, { silent: true });
 
       expect(existsSync(exportPath)).toBe(false);
     });
 
-    test('returns working FlexSearch index', () => {
+    test('returns working FlexSearch index', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
-      const { index } = buildOrLoadIndex(files, tempConfig, { silent: true });
+      const { index } = await buildOrLoadIndex(files, tempConfig, { silent: true });
 
       const results = index.search('test');
       // FlexSearch returns array of field results
       expect(results.length).toBeGreaterThan(0);
     });
 
-    test('loads cached index on second call', () => {
+    test('loads cached index on second call', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
       const exportPath = getFlexSearchExportPath(tempConfig);
 
       // First call - creates index
-      buildOrLoadIndex(files, tempConfig, { silent: true });
+      await buildOrLoadIndex(files, tempConfig, { silent: true });
       expect(existsSync(exportPath)).toBe(true);
 
       // Second call - should load cached index
-      const { index } = buildOrLoadIndex(files, tempConfig, { silent: true });
+      const { index } = await buildOrLoadIndex(files, tempConfig, { silent: true });
       const results = index.search('test');
       expect(results.length).toBeGreaterThan(0);
     });
 
-    test('force rebuild creates new index', () => {
+    test('force rebuild creates new index', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
 
       // First call
-      const stats1 = buildOrLoadIndex(files, tempConfig, { silent: true });
+      const stats1 = await buildOrLoadIndex(files, tempConfig, { silent: true });
 
       // Wait a tiny bit to ensure different timestamp
       const start = Date.now();
       while (Date.now() - start < 10) {}
 
       // Force rebuild
-      buildOrLoadIndex(files, tempConfig, { forceRebuild: true, silent: true });
+      await buildOrLoadIndex(files, tempConfig, { forceRebuild: true, silent: true });
       const stats2 = getIndexStats(tempConfig);
 
       expect(stats2.timestamp).toBeGreaterThanOrEqual(stats1.documents ? Date.now() - 1000 : 0);
@@ -190,12 +190,12 @@ describe('Index Persistence', () => {
   });
 
   describe('clearIndexCache', () => {
-    test('removes index database', () => {
+    test('removes index database', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
       const dbPath = getIndexFilePath(tempConfig);
 
       // Create index
-      buildOrLoadIndex(files, tempConfig, { silent: true });
+      await buildOrLoadIndex(files, tempConfig, { silent: true });
       expect(existsSync(dbPath)).toBe(true);
 
       // Clear
@@ -204,16 +204,16 @@ describe('Index Persistence', () => {
       expect(existsSync(dbPath)).toBe(false);
     });
 
-    test('returns false when no index exists', () => {
+    test('returns false when no index exists', async () => {
       const cleared = clearIndexCache(tempConfig);
       expect(cleared).toBe(false);
     });
   });
 
   describe('getIndexStats', () => {
-    test('returns stats when index exists', () => {
+    test('returns stats when index exists', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
-      buildOrLoadIndex(files, tempConfig);
+      await buildOrLoadIndex(files, tempConfig);
 
       const stats = getIndexStats(tempConfig);
 
@@ -225,7 +225,7 @@ describe('Index Persistence', () => {
       expect(stats.age).toBeDefined();
     });
 
-    test('returns partial stats when index does not exist', () => {
+    test('returns partial stats when index does not exist', async () => {
       const stats = getIndexStats(tempConfig);
 
       expect(stats.enabled).toBe(true);
@@ -269,38 +269,38 @@ describe('fuzzySearch with index', () => {
     }
   });
 
-  test('creates index on first search', () => {
+  test('creates index on first search', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
     const dbPath = getIndexFilePath(tempConfig);
 
     expect(existsSync(dbPath)).toBe(false);
 
-    fuzzySearch(files, 'test', { limit: 5, config: tempConfig });
+    await fuzzySearch(files, 'test', { limit: 5, config: tempConfig });
 
     expect(existsSync(dbPath)).toBe(true);
   });
 
-  test('uses cached index on subsequent searches', () => {
+  test('uses cached index on subsequent searches', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
     const dbPath = getIndexFilePath(tempConfig);
 
     // First search
-    fuzzySearch(files, 'test', { limit: 5, config: tempConfig });
+    await fuzzySearch(files, 'test', { limit: 5, config: tempConfig });
     expect(existsSync(dbPath)).toBe(true);
 
     // Second search uses cache
-    const results = fuzzySearch(files, 'document', {
+    const results = await fuzzySearch(files, 'document', {
       limit: 5,
       config: tempConfig,
     });
     expect(results.length).toBeGreaterThan(0);
   });
 
-  test('rebuildIndex option forces rebuild', () => {
+  test('rebuildIndex option forces rebuild', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
 
     // First search
-    fuzzySearch(files, 'test', { limit: 5, config: tempConfig });
+    await fuzzySearch(files, 'test', { limit: 5, config: tempConfig });
     const stats1 = getIndexStats(tempConfig);
 
     // Wait a tiny bit
@@ -308,7 +308,7 @@ describe('fuzzySearch with index', () => {
     while (Date.now() - start < 10) {}
 
     // Search with rebuild
-    fuzzySearch(files, 'test', {
+    await fuzzySearch(files, 'test', {
       limit: 5,
       config: tempConfig,
       rebuildIndex: true,
@@ -318,7 +318,7 @@ describe('fuzzySearch with index', () => {
     expect(stats2.timestamp).toBeGreaterThanOrEqual(stats1.timestamp);
   });
 
-  test('search results are consistent with and without cache', () => {
+  test('search results are consistent with and without cache', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
 
     // Disable index
@@ -327,13 +327,13 @@ describe('fuzzySearch with index', () => {
       index: { ...tempConfig.index, enabled: false },
     };
 
-    const resultsNoIndex = fuzzySearch(files, 'test document', {
+    const resultsNoIndex = await fuzzySearch(files, 'test document', {
       limit: 5,
       config: noIndexConfig,
     });
 
     // Enable index
-    const resultsWithIndex = fuzzySearch(files, 'test document', {
+    const resultsWithIndex = await fuzzySearch(files, 'test document', {
       limit: 5,
       config: tempConfig,
     });
@@ -352,16 +352,16 @@ describe('fuzzySearch with index', () => {
 // ============================================================================
 
 describe('FlexSearch Configuration', () => {
-  test('DEFAULT_CONFIG includes fuzzy options for compatibility', () => {
+  test('DEFAULT_CONFIG includes fuzzy options for compatibility', async () => {
     // These options are kept for config compatibility
     expect(DEFAULT_CONFIG.fuzzy.ignoreLocation).toBe(true);
     expect(DEFAULT_CONFIG.fuzzy.ignoreFieldNorm).toBe(true);
     expect(DEFAULT_CONFIG.fuzzy.distance).toBe(100);
   });
 
-  test('search works with default configuration', () => {
+  test('search works with default configuration', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
-    const results = fuzzySearch(files, 'test', {
+    const results = await fuzzySearch(files, 'test', {
       limit: 10,
       config: DEFAULT_CONFIG,
     });
@@ -406,31 +406,31 @@ describe('FlexSearch Serialization', () => {
   });
 
   describe('getFlexSearchExportPath', () => {
-    test('returns correct path based on config', () => {
+    test('returns correct path based on config', async () => {
       const exportPath = getFlexSearchExportPath(tempConfig);
       expect(exportPath).toBe(join(tempDir, '.ccmds-flexsearch'));
     });
   });
 
   describe('FlexSearch export on build', () => {
-    test('creates FlexSearch export directory after building index', () => {
+    test('creates FlexSearch export directory after building index', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
       const exportPath = getFlexSearchExportPath(tempConfig);
 
       expect(existsSync(exportPath)).toBe(false);
 
-      buildOrLoadIndex(files, tempConfig, { silent: true });
+      await buildOrLoadIndex(files, tempConfig, { silent: true });
 
       expect(existsSync(exportPath)).toBe(true);
       // Should have meta.json
       expect(existsSync(join(exportPath, 'meta.json'))).toBe(true);
     });
 
-    test('creates JSON files for FlexSearch export', () => {
+    test('creates JSON files for FlexSearch export', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
       const exportPath = getFlexSearchExportPath(tempConfig);
 
-      buildOrLoadIndex(files, tempConfig, { silent: true });
+      await buildOrLoadIndex(files, tempConfig, { silent: true });
 
       // Should have at least one .json file (including meta.json)
       const exportedFiles = require('fs').readdirSync(exportPath).filter(f => f.endsWith('.json'));
@@ -439,19 +439,19 @@ describe('FlexSearch Serialization', () => {
   });
 
   describe('FlexSearch warm start (fast path)', () => {
-    test('uses serialized index on warm start when no files changed', () => {
+    test('uses serialized index on warm start when no files changed', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
       const exportPath = getFlexSearchExportPath(tempConfig);
 
       // Cold start - builds index and exports
-      buildOrLoadIndex(files, tempConfig, { silent: true });
+      await buildOrLoadIndex(files, tempConfig, { silent: true });
       expect(existsSync(exportPath)).toBe(true);
 
       // Clear in-memory cache to simulate new process
       clearDocumentCache();
 
       // Warm start - should use serialized index
-      const { index, documents } = buildOrLoadIndex(files, tempConfig, { silent: true });
+      const { index, documents } = await buildOrLoadIndex(files, tempConfig, { silent: true });
 
       // Verify index works correctly
       expect(documents.length).toBe(files.length);
@@ -459,19 +459,19 @@ describe('FlexSearch Serialization', () => {
       expect(results.length).toBeGreaterThan(0);
     });
 
-    test('rebuilds index when force rebuild is requested', () => {
+    test('rebuilds index when force rebuild is requested', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
       const exportPath = getFlexSearchExportPath(tempConfig);
 
       // Cold start
-      buildOrLoadIndex(files, tempConfig, { silent: true });
+      await buildOrLoadIndex(files, tempConfig, { silent: true });
       const firstMeta = JSON.parse(require('fs').readFileSync(join(exportPath, 'meta.json'), 'utf8'));
 
       // Clear in-memory cache
       clearDocumentCache();
 
       // Force rebuild
-      buildOrLoadIndex(files, tempConfig, { forceRebuild: true, silent: true });
+      await buildOrLoadIndex(files, tempConfig, { forceRebuild: true, silent: true });
       const secondMeta = JSON.parse(require('fs').readFileSync(join(exportPath, 'meta.json'), 'utf8'));
 
       // File count and hashes should be the same if files haven't changed
@@ -481,13 +481,13 @@ describe('FlexSearch Serialization', () => {
   });
 
   describe('clearIndexCache with FlexSearch', () => {
-    test('removes FlexSearch export directory', () => {
+    test('removes FlexSearch export directory', async () => {
       const files = findMarkdownFiles(FIXTURES_DIR);
       const dbPath = getIndexFilePath(tempConfig);
       const exportPath = getFlexSearchExportPath(tempConfig);
 
       // Create index
-      buildOrLoadIndex(files, tempConfig, { silent: true });
+      await buildOrLoadIndex(files, tempConfig, { silent: true });
       expect(existsSync(dbPath)).toBe(true);
       expect(existsSync(exportPath)).toBe(true);
 

@@ -296,9 +296,9 @@ function calculateScore(doc, terms) {
  * @param {boolean} options.raw - Disable adaptive previews
  * @param {object} options.config - Configuration object
  * @param {boolean} options.rebuildIndex - Force rebuild of search index
- * @returns {Array} - Array of search results
+ * @returns {Promise<Array>} - Array of search results
  */
-export function fuzzySearch(files, query, options) {
+export async function fuzzySearch(files, query, options) {
   const config = options.config || DEFAULT_CONFIG;
   const previewConfig = config.preview || DEFAULT_CONFIG.preview;
   const forceRebuild = options.rebuildIndex || false;
@@ -310,7 +310,7 @@ export function fuzzySearch(files, query, options) {
   const searchQuery = includes.join(' ');
 
   // Use cached index when possible
-  const { index, documents } = buildOrLoadIndex(files, config, forceRebuild);
+  const { index, documents } = await buildOrLoadIndex(files, config, forceRebuild);
 
   // If no search query and no exact terms, return empty
   if (!searchQuery && exact.length === 0) {

@@ -134,7 +134,10 @@ export function mergeConfig(defaults, fileConfig, cliOptions = {}) {
 
   // CLI options override (map CLI option names to config keys)
   if (cliOptions.output) merged.outputMode = cliOptions.output;
-  if (cliOptions.limit) merged.limit = parseInt(cliOptions.limit);
+  if (cliOptions.limit) {
+    const limit = parseInt(cliOptions.limit, 10);
+    if (!isNaN(limit)) merged.limit = limit;
+  }
 
   return merged;
 }

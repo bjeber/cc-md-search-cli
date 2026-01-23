@@ -2,7 +2,11 @@
  * Configuration constants for ccmds
  */
 
-export const CONFIG_FILE_NAMES = ['.ccmdsrc', '.ccmdsrc.json', 'ccmds.config.json'];
+export const CONFIG_FILE_NAMES = [
+  '.ccmdsrc',
+  '.ccmdsrc.json',
+  'ccmds.config.json',
+];
 
 export const DEFAULT_CONFIG = {
   documentDirectories: ['.'],
@@ -44,7 +48,7 @@ export const DEFAULT_CONFIG = {
   },
   index: {
     enabled: true,
-    path: '.ccmds-index.db',
+    path: '.ccmds-flexsearch/',
     autoRebuild: true,
   },
 };

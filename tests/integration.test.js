@@ -16,12 +16,12 @@ import { FIXTURES_DIR } from './helpers/index.js';
 // ============================================================================
 
 describe('Integration Tests', () => {
-  test('full workflow: find, grep, section extraction', () => {
+  test('full workflow: find, grep, section extraction', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
     expect(files.length).toBeGreaterThan(0);
 
     // Find relevant files
-    const fuzzyResults = fuzzySearch(files, 'installation', {
+    const fuzzyResults = await fuzzySearch(files, 'installation', {
       limit: 5,
       raw: false
     });
@@ -47,7 +47,7 @@ describe('Integration Tests', () => {
     }
   });
 
-  test('output formats are consistent across search types', () => {
+  test('output formats are consistent across search types', async () => {
     const files = findMarkdownFiles(FIXTURES_DIR);
 
     const grepResults = grepSearch(files, 'test', {
@@ -56,7 +56,7 @@ describe('Integration Tests', () => {
       raw: false
     });
 
-    const fuzzyResults = fuzzySearch(files, 'test', {
+    const fuzzyResults = await fuzzySearch(files, 'test', {
       limit: 5,
       raw: false
     });

@@ -64,7 +64,7 @@ const program = new Command();
 program
   .name('ccmds')
   .description(
-    'Claude Code Markdown Search - CLI for efficient document querying'
+    'Claude Code Markdown Search - CLI for efficient document searching and discovery'
   )
   .option('--config <path>', 'Path to config file')
   .option('--no-config', 'Ignore config file')
@@ -151,7 +151,7 @@ program
   .option('-e, --exclude <patterns...>', 'Exclude patterns (glob syntax)')
   .option('--doc <name>', 'Search only in named documentation (prefix match)')
   .option('--rebuild-index', 'Force rebuild of search index', false)
-  .action((query, directories, options) => {
+  .action(async (query, directories, options) => {
     const globalOpts = program.opts();
     const config = loadConfig(globalOpts);
 
@@ -185,7 +185,7 @@ program
         extensions: config.extensions,
       });
 
-      results = fuzzySearch(files, query, {
+      results = await fuzzySearch(files, query, {
         limit,
         raw: options.raw,
         config,
@@ -503,10 +503,10 @@ program
 
 program
   .command('index')
-  .description('Manage Fuse.js search index')
+  .description('Manage search index')
   .argument('[action]', 'Action: clear, stats, rebuild (default: stats)')
   .option('--doc <name>', 'Target specific documentation (prefix match)')
-  .action((action = 'stats', options) => {
+  .action(async (action = 'stats', options) => {
     const globalOpts = program.opts();
     const config = loadConfig(globalOpts);
 
@@ -527,7 +527,7 @@ program
       });
 
       console.log(`Rebuilding index for ${files.length} files...`);
-      buildOrLoadIndex(files, config, true);
+      await buildOrLoadIndex(files, config, true);
       console.log('Index rebuilt successfully');
     } else if (action === 'stats') {
       const stats = getIndexStats(config);
@@ -653,9 +653,15 @@ const isMainModule = () => {
 
 if (isMainModule()) {
   // Handle version flag with async update check before parsing
-  handleVersionFlag().then(() => {
-    program.parse();
-  });
+  (async () => {
+    try {
+      await handleVersionFlag();
+    } catch (err) {
+      console.error('Warning: version check failed:', err);
+    } finally {
+      program.parse();
+    }
+  })();
 }
 
 // ============================================================================
