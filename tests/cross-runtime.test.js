@@ -13,7 +13,7 @@ describe('Cross-Runtime Tests', () => {
     test('--version returns version', () => {
       const { stdout, exitCode } = runCli(runtime, ['--version']);
       expect(exitCode).toBe(0);
-      expect(stdout).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(stdout).toMatch(/^cc-md-search-cli v\d+\.\d+\.\d+/);
     });
 
     test('--help shows usage', () => {

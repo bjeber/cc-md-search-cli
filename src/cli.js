@@ -21,6 +21,35 @@ import Fuse from 'fuse.js';
 const program = new Command();
 
 // ============================================================================
+// Version and Update System
+// ============================================================================
+
+const PACKAGE_VERSION = '1.0.4';
+
+/**
+ * Check npm registry for latest version
+ * @returns {Promise<{current: string, latest: string|null, updateAvailable: boolean}>}
+ */
+async function checkForUpdate() {
+  try {
+    const response = await fetch(
+      'https://registry.npmjs.org/cc-md-search-cli/latest'
+    );
+    if (!response.ok)
+      return { current: PACKAGE_VERSION, latest: null, updateAvailable: false };
+    const data = await response.json();
+    const latestVersion = data.version;
+    return {
+      current: PACKAGE_VERSION,
+      latest: latestVersion,
+      updateAvailable: latestVersion !== PACKAGE_VERSION,
+    };
+  } catch {
+    return { current: PACKAGE_VERSION, latest: null, updateAvailable: false };
+  }
+}
+
+// ============================================================================
 // Configuration System
 // ============================================================================
 
@@ -247,23 +276,30 @@ function resolveDirectories(directories, config, filterDoc = null) {
   if (directories && directories.length > 0) {
     // CLI directories override config - wrap as entries
     if (filterDoc) {
-      console.error('Warning: --doc is ignored when directories are specified via CLI');
+      console.error(
+        'Warning: --doc is ignored when directories are specified via CLI'
+      );
     }
     entries = normalizeDocumentDirectories(
-      directories.map(d => ({ path: d })),
+      directories.map((d) => ({ path: d })),
       process.cwd()
     );
   } else {
-    entries = normalizeDocumentDirectories(config.documentDirectories, configDir);
+    entries = normalizeDocumentDirectories(
+      config.documentDirectories,
+      configDir
+    );
 
     // Filter by doc name (prefix match, case-insensitive)
     if (filterDoc) {
       const filterLower = filterDoc.toLowerCase();
-      entries = entries.filter(e =>
+      entries = entries.filter((e) =>
         e.name.toLowerCase().startsWith(filterLower)
       );
       if (entries.length === 0) {
-        console.error(`Documentation "${filterDoc}" not found. Use 'ccmds docs' to list available.`);
+        console.error(
+          `Documentation "${filterDoc}" not found. Use 'ccmds docs' to list available.`
+        );
         process.exit(1);
       }
     }
@@ -658,7 +694,7 @@ function findMarkdownFilesFromDirs(directoryEntries, options = {}) {
   let allFiles = [];
 
   // Handle both legacy string arrays and new entry objects
-  const entries = directoryEntries.map(entry => {
+  const entries = directoryEntries.map((entry) => {
     if (typeof entry === 'string') {
       return { resolvedPath: entry, path: entry, name: basename(entry) };
     }
@@ -670,7 +706,7 @@ function findMarkdownFilesFromDirs(directoryEntries, options = {}) {
       const dir = entry.resolvedPath;
       const files = findMarkdownFiles(dir, dir, options);
       // Enrich files with docName for multi-doc scenarios
-      const enrichedFiles = files.map(f => ({
+      const enrichedFiles = files.map((f) => ({
         ...f,
         docName: entry.name,
       }));
@@ -1087,10 +1123,25 @@ program
   .description(
     'Claude Code Markdown Search - CLI for efficient document querying'
   )
-  .version('1.0.3')
   .option('--config <path>', 'Path to config file')
   .option('--no-config', 'Ignore config file')
   .option('--no-cache', 'Skip cache for this command');
+
+/**
+ * Handle custom version output with update check
+ * Must be called before program.parse() for async handling
+ */
+async function handleVersionFlag() {
+  if (process.argv.includes('-v') || process.argv.includes('--version')) {
+    const { current, latest, updateAvailable } = await checkForUpdate();
+    console.log(`cc-md-search-cli v${current}`);
+    if (updateAvailable) {
+      console.log(`\nUpdate available: ${latest}`);
+      console.log('Run `ccmds update` to install');
+    }
+    process.exit(0);
+  }
+}
 
 program
   .command('grep')
@@ -1119,7 +1170,7 @@ program
     // Check cache (use resolved paths for cache key)
     const cacheKey = generateCacheKey('grep', {
       query,
-      dirs: dirs.map(d => d.resolvedPath).sort(),
+      dirs: dirs.map((d) => d.resolvedPath).sort(),
       caseSensitive: options.caseSensitive,
       exclude: excludePatterns.sort(),
     });
@@ -1146,7 +1197,9 @@ program
     const limitedResults = limit ? results.slice(0, limit) : results;
 
     console.log(formatOutput(limitedResults, outputMode));
-    console.log(`\n✓ Found ${results.length} file(s) with matches${limit && results.length > limit ? ` (showing ${limit})` : ''}`);
+    console.log(
+      `\n✓ Found ${results.length} file(s) with matches${limit && results.length > limit ? ` (showing ${limit})` : ''}`
+    );
   });
 
 program
@@ -1179,7 +1232,7 @@ program
     // Check cache (use resolved paths for cache key)
     const cacheKey = generateCacheKey('find', {
       query,
-      dirs: dirs.map(d => d.resolvedPath).sort(),
+      dirs: dirs.map((d) => d.resolvedPath).sort(),
       limit,
       exclude: excludePatterns.sort(),
     });
@@ -1259,14 +1312,19 @@ program
   .option('-d, --depth <number>', 'Maximum heading depth', '6')
   .option('-o, --output <mode>', 'Output mode: text, json', 'text')
   .option('-e, --exclude <patterns...>', 'Exclude patterns (glob syntax)')
-  .option('--doc <name>', 'Show outline only from named documentation (prefix match)')
+  .option(
+    '--doc <name>',
+    'Show outline only from named documentation (prefix match)'
+  )
   .action((paths, options) => {
     const globalOpts = program.opts();
     const config = loadConfig(globalOpts);
     const maxDepth = parseInt(options.depth);
     // When paths provided, use them directly; otherwise use config entries
-    const dirs = paths.length ? null : resolveDirectories([], config, options.doc);
-    const targetPaths = paths.length ? paths : dirs.map(d => d.resolvedPath);
+    const dirs = paths.length
+      ? null
+      : resolveDirectories([], config, options.doc);
+    const targetPaths = paths.length ? paths : dirs.map((d) => d.resolvedPath);
 
     // Merge exclude patterns from CLI and config
     const excludePatterns = [
@@ -1506,15 +1564,21 @@ program
     const entries = resolveDirectories(null, config);
 
     if (options.output === 'json') {
-      console.log(JSON.stringify(entries.map(e => ({
-        name: e.name,
-        path: e.path,
-        description: e.description,
-      }))));
+      console.log(
+        JSON.stringify(
+          entries.map((e) => ({
+            name: e.name,
+            path: e.path,
+            description: e.description,
+          }))
+        )
+      );
     } else {
       if (entries.length === 0) {
         console.log('No documentation directories configured.');
-        console.log('Add directories to your .ccmdsrc file or run: ccmds init -d ./docs');
+        console.log(
+          'Add directories to your .ccmdsrc file or run: ccmds init -d ./docs'
+        );
         return;
       }
       console.log('Configured Documentations:\n');
@@ -1526,6 +1590,56 @@ program
         }
         console.log();
       });
+    }
+  });
+
+program
+  .command('update')
+  .description('Update cc-md-search-cli to the latest version')
+  .option('--check', 'Only check if update is available (no install)')
+  .action(async (options) => {
+    const { current, latest, updateAvailable } = await checkForUpdate();
+
+    if (latest === null) {
+      console.log(
+        'Unable to check for updates. Check your internet connection.'
+      );
+      return;
+    }
+
+    if (!updateAvailable) {
+      console.log(`You're on the latest version (${current}).`);
+      return;
+    }
+
+    console.log(`Update available: ${current} → ${latest}`);
+
+    if (options.check) {
+      console.log('\nTo update, run: ccmds update');
+      return;
+    }
+
+    // Detect package manager and run update
+    const { spawnSync } = await import('child_process');
+
+    // Try bun first, fall back to npm
+    const bunResult = spawnSync('bun', ['--version'], { encoding: 'utf-8' });
+    const useBun = bunResult.status === 0;
+
+    const cmd = useBun ? 'bun' : 'npm';
+    const args = useBun
+      ? ['update', '-g', 'cc-md-search-cli']
+      : ['update', '-g', 'cc-md-search-cli'];
+
+    console.log(`\nUpdating via ${cmd}...`);
+    const result = spawnSync(cmd, args, { stdio: 'inherit' });
+
+    if (result.status === 0) {
+      console.log(`\nSuccessfully updated to ${latest}!`);
+    } else {
+      console.log(
+        `\nUpdate failed. Try manually: ${cmd} update -g cc-md-search-cli`
+      );
     }
   });
 
@@ -1541,7 +1655,10 @@ const isMainModule = () => {
 };
 
 if (isMainModule()) {
-  program.parse();
+  // Handle version flag with async update check before parsing
+  handleVersionFlag().then(() => {
+    program.parse();
+  });
 }
 
 // Export for testing
@@ -1587,6 +1704,11 @@ export {
   setCachedResult,
   clearCache,
   getCacheStats,
+
+  // Version and Update
+  PACKAGE_VERSION,
+  checkForUpdate,
+  handleVersionFlag,
 
   // CLI
   program,

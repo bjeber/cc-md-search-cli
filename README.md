@@ -133,6 +133,7 @@ The AI uses these commands behind the scenes when you ask questions like:
 | `ccmds docs`                     | List all configured documentations      |
 | `ccmds config`                   | Show current configuration              |
 | `ccmds init`                     | Create configuration file               |
+| `ccmds update`                   | Update to latest version                |
 
 **Common options:**
 
@@ -207,6 +208,28 @@ git clone https://github.com/bjeber/cc-md-search-cli.git
 cd cc-md-search-cli
 bun install
 npm link
+```
+
+## Updating
+
+Check for and install updates:
+
+```bash
+# Check if update available
+ccmds update --check
+
+# Update to latest version
+ccmds update
+```
+
+Or update manually:
+
+```bash
+# Using Bun
+bun update -g cc-md-search-cli
+
+# Using npm
+npm update -g cc-md-search-cli
 ```
 
 ## AI Assistant Integration
