@@ -16,6 +16,12 @@ All notable changes to this project will be documented in this file.
 - **`update` command** - `ccmds update` to check for and install latest version
 - **Version check on `--version`** - Shows update availability when checking version
 - **New dependencies** - @inquirer/prompts, chalk, ora for terminal UI
+- **Context-aware previews for `find`** - Previews now show the paragraph or code block where the search term appears, instead of the beginning of the file
+  - Uses smart boundary detection (blank lines, headings, code fences)
+  - Preserves complete code blocks when match is in code
+  - Shows full bullet lists and paragraphs for text matches
+  - Falls back to description/file start if no body match found
+  - Configurable via `preview.maxLines` (default: 20) to limit context size
 
 ### Changed
 
@@ -120,6 +126,7 @@ All notable changes to this project will be documented in this file.
 - Configurable search options (depth, limit, threshold)
 - Claude Code skill integration (`ccmds`)
 
+[1.0.4]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.0...v1.0.1

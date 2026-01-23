@@ -52,6 +52,7 @@ The CLI looks for config files in this order:
     }
   },
   "preview": {
+    "maxLines": 20,
     "topResults": 600,
     "midResults": 300,
     "otherResults": 150
@@ -73,9 +74,10 @@ The CLI looks for config files in this order:
 | `limit` | `number` | `10` | Default result limit |
 | `fuzzy.threshold` | `number` | `0.4` | Match threshold (0=exact, 1=loose) |
 | `fuzzy.weights` | `object` | See above | Field weights for scoring |
-| `preview.topResults` | `number` | `600` | Preview chars for top 3 results |
-| `preview.midResults` | `number` | `300` | Preview chars for results 4-7 |
-| `preview.otherResults` | `number` | `150` | Preview chars for remaining |
+| `preview.maxLines` | `number` | `20` | Max lines for context-aware previews |
+| `preview.topResults` | `number` | `600` | Fallback preview chars for top 3 results |
+| `preview.midResults` | `number` | `300` | Fallback preview chars for results 4-7 |
+| `preview.otherResults` | `number` | `150` | Fallback preview chars for remaining |
 | `frontmatterFields` | `string[]` | See above | Frontmatter fields to include |
 | `extensions` | `string[]` | `[".md", ".markdown"]` | File extensions |
 | `cache.enabled` | `boolean` | `false` | Enable result caching |
