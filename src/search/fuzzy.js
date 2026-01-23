@@ -111,6 +111,67 @@ export function extractParagraphContext(body, charOffset, maxLines = 20) {
 }
 
 /**
+ * Extract preview for a title match (title + following paragraph)
+ * @param {string} body - Document body
+ * @param {string} title - Document title
+ * @param {number} maxLines - Maximum lines to include
+ * @returns {string} - Preview text
+ */
+function extractTitleMatchPreview(body, title, maxLines = 10) {
+  const lines = body.split('\n');
+
+  // Find the title line in the body
+  let titleLineIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(/^#{1,6}\s+(.+)$/);
+    if (match && match[1].trim() === title) {
+      titleLineIndex = i;
+      break;
+    }
+  }
+
+  if (titleLineIndex === -1) {
+    // Title not found in body, return first paragraph
+    return extractParagraphContext(body, 0, maxLines);
+  }
+
+  // Extract title and following content (skip blank lines, get next paragraph)
+  let endLine = titleLineIndex;
+  let foundContent = false;
+
+  for (let i = titleLineIndex + 1; i < lines.length && (endLine - titleLineIndex) < maxLines; i++) {
+    const line = lines[i];
+    const trimmedLine = line.trim();
+
+    // Stop at next heading
+    if (line.match(/^#{1,6}\s/)) {
+      break;
+    }
+
+    // Stop at code block
+    if (line.startsWith('```')) {
+      break;
+    }
+
+    // Skip initial blank lines
+    if (!foundContent && trimmedLine === '') {
+      continue;
+    }
+
+    // Found content
+    foundContent = true;
+    endLine = i;
+
+    // Stop after first paragraph (blank line after content)
+    if (foundContent && trimmedLine === '') {
+      break;
+    }
+  }
+
+  return lines.slice(titleLineIndex, endLine + 1).join('\n').trim();
+}
+
+/**
  * Fuzzy search for finding relevant documents
  * @param {Array} files - Array of file objects to search
  * @param {string} query - Search query
@@ -129,9 +190,10 @@ export function fuzzySearch(files, query, options) {
   // Use cached index when possible
   const { fuse } = buildOrLoadIndex(files, config, forceRebuild);
 
-  const results = fuse.search(query);
+  // Pass limit directly to Fuse.js to avoid scoring all matches
+  const results = fuse.search(query, { limit: options.limit });
 
-  return results.slice(0, options.limit).map((result, index) => {
+  return results.map((result, index) => {
     // Adaptive preview length based on rank (configurable)
     const previewLength = options.raw
       ? 200
@@ -144,10 +206,15 @@ export function fuzzySearch(files, query, options) {
     let preview = '';
     const maxLines = previewConfig.maxLines || 20;
 
-    // Try to extract paragraph/section context around the actual match in body
+    // Check if match is in title field
+    const titleMatch = result.matches?.find(m => m.key === 'title');
     const bodyMatch = result.matches?.find(m => m.key === 'body');
-    if (bodyMatch && bodyMatch.indices && bodyMatch.indices.length > 0) {
-      // Find the best (longest) match from the fuzzy indices
+
+    if (titleMatch && (!bodyMatch || titleMatch.indices?.[0]?.[1] - titleMatch.indices?.[0]?.[0] >= 2)) {
+      // Title match: show title + following paragraph
+      preview = extractTitleMatchPreview(result.item.body, result.item.title, maxLines);
+    } else if (bodyMatch && bodyMatch.indices && bodyMatch.indices.length > 0) {
+      // Body match: extract paragraph context around the match
       const bestMatch = findBestMatchFromIndices(bodyMatch.indices);
       if (bestMatch && bestMatch.length >= 2) {
         preview = extractParagraphContext(

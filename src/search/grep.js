@@ -44,7 +44,7 @@ export function grepSearch(files, query, options) {
               start: Math.max(0, index - options.context),
               end: Math.min(lines.length - 1, index + options.context),
             }
-          : extractSmartContext(lines, index);
+          : extractSmartContext(lines, index, { extendShort: true });
 
         // Skip if this range overlaps with already processed
         const overlaps = processedRanges.some(

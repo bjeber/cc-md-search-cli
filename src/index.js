@@ -33,6 +33,7 @@ export {
   extractHeadings,
   findParentHeading,
   buildHeadingPath,
+  extractFirstHeading,
   extractSmartContext,
   parseMarkdownFile,
   filterFrontmatter,
@@ -56,12 +57,14 @@ export {
   INDEX_VERSION,
   getIndexFilePath,
   getIndexMetaPath,
+  getDocumentCachePath,
   computeFileHash,
   computeFileHashes,
   isIndexFresh,
   buildFuseKeys,
   buildOrLoadIndex,
   clearIndexCache,
+  clearDocumentCache,
   getIndexStats,
 } from './index-persistence/index.js';
 

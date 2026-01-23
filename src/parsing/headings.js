@@ -23,6 +23,22 @@ export function extractHeadings(lines) {
 }
 
 /**
+ * Extract the first heading (title) from markdown body
+ * @param {string} body - Markdown body content
+ * @returns {string|null} - First heading text or null
+ */
+export function extractFirstHeading(body) {
+  const lines = body.split('\n');
+  for (const line of lines) {
+    const match = line.match(/^(#{1,6})\s+(.+)$/);
+    if (match) {
+      return match[2].trim();
+    }
+  }
+  return null;
+}
+
+/**
  * Find nearest parent heading for a line
  * @param {Array<{level: number, text: string, line: number}>} headings - Array of headings
  * @param {number} lineIndex - Line index to find parent for
