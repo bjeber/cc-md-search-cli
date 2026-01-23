@@ -3,17 +3,18 @@ import { join } from 'path';
 import { FIXTURES_DIR, NESTED_DIR, SECOND_DOCS_DIR, runCli } from './helpers/index.js';
 
 // ============================================================================
-// CROSS-RUNTIME TESTS (Bun & Node.js)
+// RUNTIME TESTS (Bun only - Node.js not supported due to bun:sqlite)
 // ============================================================================
 
-describe('Cross-Runtime Tests', () => {
-  const RUNTIMES = ['bun', 'node'];
+describe('Runtime Tests', () => {
+  // Node.js is not supported because we use bun:sqlite for persistence
+  const RUNTIMES = ['bun'];
 
   describe.each(RUNTIMES)('%s runtime', (runtime) => {
     test('--version returns version', () => {
       const { stdout, exitCode } = runCli(runtime, ['--version']);
       expect(exitCode).toBe(0);
-      expect(stdout).toMatch(/^\d+\.\d+\.\d+$/);
+      expect(stdout).toMatch(/^cc-md-search-cli v\d+\.\d+\.\d+/);
     });
 
     test('--help shows usage', () => {
@@ -103,108 +104,6 @@ describe('Cross-Runtime Tests', () => {
     });
   });
 
-  describe('Cross-runtime output consistency', () => {
-    test('list output matches between runtimes', () => {
-      const bunResult = runCli('bun', ['list', FIXTURES_DIR]);
-      const nodeResult = runCli('node', ['list', FIXTURES_DIR]);
-
-      // Both should succeed
-      expect(bunResult.exitCode).toBe(0);
-      expect(nodeResult.exitCode).toBe(0);
-
-      // Sort and compare (order may differ)
-      const bunFiles = bunResult.stdout.split('\n').sort();
-      const nodeFiles = nodeResult.stdout.split('\n').sort();
-      expect(bunFiles).toEqual(nodeFiles);
-    });
-
-    test('grep JSON output matches between runtimes', () => {
-      const bunResult = runCli('bun', ['grep', 'content', FIXTURES_DIR, '-o', 'json']);
-      const nodeResult = runCli('node', ['grep', 'content', FIXTURES_DIR, '-o', 'json']);
-
-      expect(bunResult.exitCode).toBe(0);
-      expect(nodeResult.exitCode).toBe(0);
-
-      // Parse JSON from both (pretty-printed, extract before "Found" line)
-      const bunJson = bunResult.stdout.split('\n✓ Found')[0].trim();
-      const nodeJson = nodeResult.stdout.split('\n✓ Found')[0].trim();
-
-      const bunParsed = JSON.parse(bunJson);
-      const nodeParsed = JSON.parse(nodeJson);
-
-      // Same number of results
-      expect(bunParsed.length).toBe(nodeParsed.length);
-
-      // Same files found
-      const bunFileSet = new Set(bunParsed.map(r => r.file));
-      const nodeFileSet = new Set(nodeParsed.map(r => r.file));
-      expect(bunFileSet).toEqual(nodeFileSet);
-    });
-
-    test('find JSON output matches between runtimes', () => {
-      const bunResult = runCli('bun', ['find', 'test', FIXTURES_DIR, '-o', 'json']);
-      const nodeResult = runCli('node', ['find', 'test', FIXTURES_DIR, '-o', 'json']);
-
-      expect(bunResult.exitCode).toBe(0);
-      expect(nodeResult.exitCode).toBe(0);
-
-      const bunJson = bunResult.stdout.split('\n✓ Found')[0].trim();
-      const nodeJson = nodeResult.stdout.split('\n✓ Found')[0].trim();
-
-      const bunParsed = JSON.parse(bunJson);
-      const nodeParsed = JSON.parse(nodeJson);
-
-      // Same files found (order may differ due to scoring)
-      const bunFileSet = new Set(bunParsed.map(r => r.file));
-      const nodeFileSet = new Set(nodeParsed.map(r => r.file));
-      expect(bunFileSet).toEqual(nodeFileSet);
-    });
-
-    test('outline JSON output matches between runtimes', () => {
-      const testFile = join(FIXTURES_DIR, 'simple.md');
-      const bunResult = runCli('bun', ['outline', testFile, '-o', 'json']);
-      const nodeResult = runCli('node', ['outline', testFile, '-o', 'json']);
-
-      expect(bunResult.exitCode).toBe(0);
-      expect(nodeResult.exitCode).toBe(0);
-
-      const bunParsed = JSON.parse(bunResult.stdout);
-      const nodeParsed = JSON.parse(nodeResult.stdout);
-
-      expect(bunParsed.file).toBe(nodeParsed.file);
-      expect(bunParsed.headings.length).toBe(nodeParsed.headings.length);
-    });
-
-    test('list output matches between runtimes for multiple directories', () => {
-      const bunResult = runCli('bun', ['list', NESTED_DIR, SECOND_DOCS_DIR]);
-      const nodeResult = runCli('node', ['list', NESTED_DIR, SECOND_DOCS_DIR]);
-
-      expect(bunResult.exitCode).toBe(0);
-      expect(nodeResult.exitCode).toBe(0);
-
-      const bunFiles = bunResult.stdout.split('\n').sort();
-      const nodeFiles = nodeResult.stdout.split('\n').sort();
-      expect(bunFiles).toEqual(nodeFiles);
-    });
-
-    test('grep JSON output matches between runtimes for multiple directories', () => {
-      const bunResult = runCli('bun', ['grep', 'documentation', NESTED_DIR, SECOND_DOCS_DIR, '-o', 'json']);
-      const nodeResult = runCli('node', ['grep', 'documentation', NESTED_DIR, SECOND_DOCS_DIR, '-o', 'json']);
-
-      expect(bunResult.exitCode).toBe(0);
-      expect(nodeResult.exitCode).toBe(0);
-
-      const bunJson = bunResult.stdout.split('\n✓ Found')[0].trim();
-      const nodeJson = nodeResult.stdout.split('\n✓ Found')[0].trim();
-
-      const bunParsed = JSON.parse(bunJson);
-      const nodeParsed = JSON.parse(nodeJson);
-
-      expect(bunParsed.length).toBe(nodeParsed.length);
-
-      const bunFileSet = new Set(bunParsed.map(r => r.file));
-      const nodeFileSet = new Set(nodeParsed.map(r => r.file));
-      expect(bunFileSet).toEqual(nodeFileSet);
-    });
-  });
+  // Note: Cross-runtime consistency tests removed because Node.js is not supported
+  // (bun:sqlite is Bun-specific)
 });

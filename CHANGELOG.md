@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.4] - 2026-01-23
+
+### Added
+
+- **Interactive `init` wizard** - `ccmds init` now runs an interactive configuration wizard in TTY environments
+  - Prompts for document directories with option to create non-existent paths
+  - Named directory support with optional descriptions
+  - Common exclude pattern presets via checkbox selection
+  - Output mode selection
+  - Advanced options: result limit, fuzzy threshold, file extensions, caching
+- **`--no-interactive` flag** - Skip the wizard and use non-interactive mode
+- **`update` command** - `ccmds update` to check for and install latest version
+- **Version check on `--version`** - Shows update availability when checking version
+- **New dependencies** - @inquirer/prompts, chalk, ora for terminal UI
+- **Context-aware previews for `find`** - Previews now show the paragraph or code block where the search term appears, instead of the beginning of the file
+  - Uses smart boundary detection (blank lines, headings, code fences)
+  - Preserves complete code blocks when match is in code
+  - Shows full bullet lists and paragraphs for text matches
+  - Falls back to description/file start if no body match found
+  - Configurable via `preview.maxLines` (default: 20) to limit context size
+- **Extended query operators** - `'term` for exact substring match, `!term` for exclusion, space-separated terms for AND search
+- **`--clear-cache` flag** - Clear search index cache before running `find` or `grep` commands
+
+### Changed
+
+- **Minimal config generation** - Generated configs only include values that differ from defaults
+- **Exclude patterns prompt** - Now asks "Add exclude patterns?" first (default: No) before showing the list
+- **README quickstart** - Simplified to use `ccmds init` interactive wizard
+- **Replaced Fuse.js with FlexSearch** - New search engine with forward tokenization and resolution-based ranking
+- **Index storage format** - Changed from `.ccmds-fuse-index.json` + `.ccmds-fuse-index-meta.json` files to `.ccmds-flexsearch/` directory structure
+- **Search index version** - Bumped to version 5 for automatic cache invalidation
+- **Default index path** - Changed from `.ccmds-fuse-index.json` to `.ccmds-flexsearch/`
+
+### Removed
+
+- **Fuse.js dependency** - Replaced by FlexSearch
+- **Fuse.js-specific config options** - `ignoreLocation`, `ignoreFieldNorm`, `distance` no longer apply
+
 ## [1.0.3] - 2026-01-22
 
 ### Added
@@ -99,6 +137,7 @@ All notable changes to this project will be documented in this file.
 - Configurable search options (depth, limit, threshold)
 - Claude Code skill integration (`ccmds`)
 
+[1.0.4]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/bjeber/cc-md-search-cli/compare/v1.0.0...v1.0.1

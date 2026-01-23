@@ -7,3 +7,11 @@ node_modules/
 *.backup
 
 .ccmdsrc
+.ccmds-flexsearch/
+
+# Legacy cache files (auto-deleted on first run)
+.ccmds-index.db
+.ccmds-index.db-wal
+.ccmds-index.db-shm
+.ccmds-fuse-index*.json
+.ccmds-docs-cache.json

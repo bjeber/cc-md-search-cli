@@ -34,18 +34,10 @@ npm i -g cc-md-search-cli
 
 ```bash
 cd your-project
-ccmds init -d ./docs    # Creates .ccmdsrc config file
+ccmds init
 ```
 
-This creates a `.ccmdsrc` file with `documentDirectories` pointing to your docs folder. **This is the key setting** - it tells ccmds where your documentation lives:
-
-```json
-{
-  "documentDirectories": ["./docs"]
-}
-```
-
-Adjust the path to match your project's documentation location (e.g., `./documentation`, `./wiki`, or multiple directories).
+This runs an interactive wizard that creates a `.ccmdsrc` configuration file in the current directory. It guides you through setting up your documentation directories and search preferences.
 
 #### Project-Level Agent Instructions
 
@@ -133,6 +125,7 @@ The AI uses these commands behind the scenes when you ask questions like:
 | `ccmds docs`                     | List all configured documentations      |
 | `ccmds config`                   | Show current configuration              |
 | `ccmds init`                     | Create configuration file               |
+| `ccmds update`                   | Update to latest version                |
 
 **Common options:**
 
@@ -148,7 +141,9 @@ See `ccmds --help` or `ccmds <command> --help` for full options.
 Create a `.ccmdsrc` file in your project root:
 
 ```bash
-ccmds init
+ccmds init              # Interactive wizard (in terminal)
+ccmds init -d ./docs    # Pre-fill directories
+ccmds init --no-interactive  # Skip wizard, use defaults
 ```
 
 Example configuration:
@@ -207,6 +202,28 @@ git clone https://github.com/bjeber/cc-md-search-cli.git
 cd cc-md-search-cli
 bun install
 npm link
+```
+
+## Updating
+
+Check for and install updates:
+
+```bash
+# Check if update available
+ccmds update --check
+
+# Update to latest version
+ccmds update
+```
+
+Or update manually:
+
+```bash
+# Using Bun
+bun update -g cc-md-search-cli
+
+# Using npm
+npm update -g cc-md-search-cli
 ```
 
 ## AI Assistant Integration

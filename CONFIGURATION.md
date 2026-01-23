@@ -23,16 +23,31 @@ ccmds find "authentication"
 
 ### Creating a Config File
 
-```bash
-# Create with default settings
-ccmds init
+The `init` command creates a `.ccmdsrc` configuration file. By default, it runs an **interactive wizard** when in a terminal (TTY).
 
-# Create with custom directories
-ccmds init -d ./docs ./wiki
+```bash
+# Interactive mode (default in terminal)
+ccmds init                    # Guides you through configuration options
+
+# Non-interactive mode
+ccmds init --no-interactive   # Creates config with defaults
+ccmds init -d ./docs ./wiki   # Pre-fills directories, still interactive
+ccmds init --no-interactive -d ./docs  # Fully non-interactive
 
 # Overwrite existing config
-ccmds init --force
+ccmds init --force            # Works with both interactive/non-interactive
 ```
+
+**Interactive mode** prompts for:
+1. Document directories (with option to create non-existent dirs)
+2. Exclude patterns (common presets + custom)
+3. Output mode
+4. Advanced options (limit, fuzzy threshold, extensions, caching)
+
+**Non-interactive mode** is used automatically when:
+- Running in CI/CD pipelines (no TTY)
+- Using `--no-interactive` flag
+- Piping input/output
 
 ### File Locations
 
@@ -73,6 +88,7 @@ The CLI looks for config files in this order:
     }
   },
   "preview": {
+    "maxLines": 20,
     "topResults": 600,
     "midResults": 300,
     "otherResults": 150
@@ -93,15 +109,19 @@ The CLI looks for config files in this order:
 | `limit` | `number` | `10` | Default result limit for find |
 | `fuzzy.threshold` | `number` | `0.4` | Fuzzy match threshold (0=exact, 1=loose) |
 | `fuzzy.weights` | `object` | See above | Field weights for search scoring |
-| `preview.topResults` | `number` | `600` | Preview chars for results 1-3 |
-| `preview.midResults` | `number` | `300` | Preview chars for results 4-7 |
-| `preview.otherResults` | `number` | `150` | Preview chars for remaining results |
+| `preview.maxLines` | `number` | `20` | Max lines for context-aware previews |
+| `preview.topResults` | `number` | `600` | Fallback preview chars for results 1-3 |
+| `preview.midResults` | `number` | `300` | Fallback preview chars for results 4-7 |
+| `preview.otherResults` | `number` | `150` | Fallback preview chars for remaining |
 | `frontmatterFields` | `string[]` | See above | Frontmatter fields to include |
 | `extensions` | `string[]` | `[".md", ".markdown"]` | File extensions to search |
 | `aliases` | `object` | `{}` | Command shortcuts (planned) |
 | `cache.enabled` | `boolean` | `false` | Enable result caching |
 | `cache.ttl` | `number` | `300` | Cache expiration in seconds |
 | `cache.maxEntries` | `number` | `50` | Maximum cached queries |
+| `index.enabled` | `boolean` | `true` | Enable FlexSearch index caching |
+| `index.path` | `string` | `".ccmds-flexsearch/"` | Index directory location |
+| `index.autoRebuild` | `boolean` | `true` | Auto-rebuild when files change |
 
 ---
 
@@ -382,6 +402,85 @@ Cache is stored in `.ccmds-cache.json` in the project root.
 
 ---
 
+## Search Index (Performance)
+
+The CLI automatically caches the FlexSearch index to dramatically improve search performance (60-80% faster on subsequent searches).
+
+### How It Works
+
+1. **First search**: Builds index, saves to `.ccmds-flexsearch/` directory
+2. **Subsequent searches**: Loads cached index if files haven't changed
+3. **Auto-invalidation**: Detects file changes via mtime hashes
+
+### Configuration
+
+```json
+{
+  "index": {
+    "enabled": true,
+    "path": ".ccmds-flexsearch/",
+    "autoRebuild": true
+  }
+}
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enabled` | `true` | Enable index caching |
+| `path` | `".ccmds-flexsearch/"` | Index directory location |
+| `autoRebuild` | `true` | Automatically rebuild when files change |
+
+### Index Commands
+
+```bash
+# View index statistics
+ccmds index stats
+
+# Clear cached index
+ccmds index clear
+
+# Force rebuild index
+ccmds index rebuild
+```
+
+### Force Rebuild on Search
+
+```bash
+ccmds find "query" --rebuild-index
+```
+
+### Clear Cache Before Search
+
+```bash
+ccmds find "query" --clear-cache
+```
+
+### Query Operators
+
+FlexSearch supports extended query operators:
+
+| Operator | Example | Description |
+|----------|---------|-------------|
+| (default) | `auth` | Fuzzy/prefix match |
+| `'term` | `'authentication` | Exact substring match |
+| `!term` | `!deprecated` | Exclude results containing term |
+| space | `auth api` | AND search (both terms required) |
+
+### Files Created
+
+- `.ccmds-flexsearch/` - FlexSearch index directory containing:
+  - `meta.json` - Metadata with version, timestamp, and file hashes
+  - Multiple `.json` segment files - Indexed document data
+
+Add to `.gitignore`:
+
+```
+.ccmds-flexsearch/
+.ccmds-cache.json
+```
+
+---
+
 ## Context Efficiency Features
 
 The CLI includes optimizations to reduce AI context usage by 30-50%:
@@ -392,10 +491,12 @@ The CLI includes optimizations to reduce AI context usage by 30-50%:
 - **Heading paths** - Shows `## Setup > ### Prerequisites` for each match
 - **Deduplication** - Overlapping matches are merged
 
-### Adaptive Previews (find)
-- Top 3 results: 600 characters (configurable via `preview.topResults`)
-- Results 4-7: 300 characters (configurable via `preview.midResults`)
-- Remaining: 150 characters (configurable via `preview.otherResults`)
+### Context-Aware Previews (find)
+- **Shows the actual paragraph or code block** where the search term appears
+- Uses smart boundary detection (blank lines, headings, code fences)
+- Preserves complete code blocks when match is inside one
+- Configurable line limit via `preview.maxLines` (default: 20)
+- Falls back to file start when no body match (uses `preview.topResults`/`midResults`/`otherResults`)
 
 ### Frontmatter Filtering
 Only includes useful fields by default: `title`, `description`, `tags`, `category`, `summary`, `keywords`
