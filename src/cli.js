@@ -17,6 +17,7 @@ import { homedir } from 'os';
 import { createHash } from 'crypto';
 import matter from 'gray-matter';
 import Fuse from 'fuse.js';
+import { runInteractiveInit } from './init/index.js';
 
 const program = new Command();
 
@@ -1421,7 +1422,22 @@ program
   .description('Create a configuration file in the current directory')
   .option('-f, --force', 'Overwrite existing config file', false)
   .option('-d, --directories <dirs...>', 'Default directories to search')
-  .action((options) => {
+  .option('--no-interactive', 'Skip interactive wizard')
+  .action(async (options) => {
+    // Determine if we should run interactive mode
+    // Interactive if: TTY available AND not explicitly disabled
+    const shouldBeInteractive =
+      process.stdout.isTTY && options.interactive !== false;
+
+    if (shouldBeInteractive) {
+      await runInteractiveInit({
+        force: options.force,
+        directories: options.directories,
+      });
+      return;
+    }
+
+    // Non-interactive mode (original behavior)
     const configPath = join(process.cwd(), '.ccmdsrc');
 
     if (existsSync(configPath) && !options.force) {
@@ -1436,11 +1452,6 @@ program
 
     writeFileSync(configPath, configContent, 'utf-8');
     console.log(`Created config file: ${configPath}`);
-    console.log('\nYou can customize this file to:');
-    console.log('  - Set default search directories');
-    console.log('  - Add exclude patterns');
-    console.log('  - Configure fuzzy search settings');
-    console.log('  - Define command aliases');
   });
 
 program

@@ -24,11 +24,14 @@ describe('CLI Configuration Commands', () => {
 
   for (const runtime of ['bun', 'node']) {
     describe(`init command (${runtime})`, () => {
-      test('creates config file in current directory', () => {
+      // Note: Tests run in non-TTY mode, so interactive mode is skipped automatically.
+      // We also explicitly use --no-interactive for clarity.
+
+      test('creates config file in current directory (non-interactive)', () => {
         const testDir = join(CONFIG_CLI_DIR, `init-test-${runtime}`);
         mkdirSync(testDir, { recursive: true });
 
-        const { stdout, exitCode } = runCli(runtime, ['init'], { cwd: testDir });
+        const { stdout, exitCode } = runCli(runtime, ['init', '--no-interactive'], { cwd: testDir });
 
         expect(exitCode).toBe(0);
         expect(stdout).toContain('Created config file');
@@ -42,7 +45,7 @@ describe('CLI Configuration Commands', () => {
         mkdirSync(testDir, { recursive: true });
         writeFileSync(join(testDir, '.ccmdsrc'), '{}');
 
-        const { stderr, exitCode } = runCli(runtime, ['init'], { cwd: testDir });
+        const { stderr, exitCode } = runCli(runtime, ['init', '--no-interactive'], { cwd: testDir });
 
         expect(exitCode).toBe(1);
         expect(stderr).toContain('already exists');
@@ -55,7 +58,7 @@ describe('CLI Configuration Commands', () => {
         mkdirSync(testDir, { recursive: true });
         writeFileSync(join(testDir, '.ccmdsrc'), '{"old": true}');
 
-        const { stdout, exitCode } = runCli(runtime, ['init', '--force'], { cwd: testDir });
+        const { stdout, exitCode } = runCli(runtime, ['init', '--force', '--no-interactive'], { cwd: testDir });
 
         expect(exitCode).toBe(0);
         expect(stdout).toContain('Created config file');
@@ -67,13 +70,33 @@ describe('CLI Configuration Commands', () => {
         const testDir = join(CONFIG_CLI_DIR, `init-dirs-${runtime}`);
         mkdirSync(testDir, { recursive: true });
 
-        const { exitCode } = runCli(runtime, ['init', '-d', './wiki', './docs'], { cwd: testDir });
+        const { exitCode } = runCli(runtime, ['init', '-d', './wiki', './docs', '--no-interactive'], { cwd: testDir });
 
         expect(exitCode).toBe(0);
 
         const configPath = join(testDir, '.ccmdsrc');
         const config = JSON.parse(readFileSync(configPath, 'utf-8'));
         expect(config.documentDirectories).toEqual(['./wiki', './docs']);
+
+        rmSync(testDir, { recursive: true });
+      });
+
+      test('generates valid JSON config', () => {
+        const testDir = join(CONFIG_CLI_DIR, `init-json-${runtime}`);
+        mkdirSync(testDir, { recursive: true });
+
+        runCli(runtime, ['init', '--no-interactive'], { cwd: testDir });
+
+        const configPath = join(testDir, '.ccmdsrc');
+        const content = readFileSync(configPath, 'utf-8');
+
+        // Should be valid JSON
+        expect(() => JSON.parse(content)).not.toThrow();
+
+        // Should have required fields
+        const config = JSON.parse(content);
+        expect(config.documentDirectories).toBeDefined();
+        expect(config.exclude).toBeDefined();
 
         rmSync(testDir, { recursive: true });
       });

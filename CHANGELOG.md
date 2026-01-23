@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.4] - 2026-01-23
+
+### Added
+
+- **Interactive `init` wizard** - `ccmds init` now runs an interactive configuration wizard in TTY environments
+  - Prompts for document directories with option to create non-existent paths
+  - Named directory support with optional descriptions
+  - Common exclude pattern presets via checkbox selection
+  - Output mode selection
+  - Advanced options: result limit, fuzzy threshold, file extensions, caching
+- **`--no-interactive` flag** - Skip the wizard and use non-interactive mode
+- **`update` command** - `ccmds update` to check for and install latest version
+- **Version check on `--version`** - Shows update availability when checking version
+- **New dependencies** - @inquirer/prompts, chalk, ora for terminal UI
+
+### Changed
+
+- **Minimal config generation** - Generated configs only include values that differ from defaults
+- **Exclude patterns prompt** - Now asks "Add exclude patterns?" first (default: No) before showing the list
+- **README quickstart** - Simplified to use `ccmds init` interactive wizard
+
 ## [1.0.3] - 2026-01-22
 
 ### Added

@@ -23,16 +23,31 @@ ccmds find "authentication"
 
 ### Creating a Config File
 
-```bash
-# Create with default settings
-ccmds init
+The `init` command creates a `.ccmdsrc` configuration file. By default, it runs an **interactive wizard** when in a terminal (TTY).
 
-# Create with custom directories
-ccmds init -d ./docs ./wiki
+```bash
+# Interactive mode (default in terminal)
+ccmds init                    # Guides you through configuration options
+
+# Non-interactive mode
+ccmds init --no-interactive   # Creates config with defaults
+ccmds init -d ./docs ./wiki   # Pre-fills directories, still interactive
+ccmds init --no-interactive -d ./docs  # Fully non-interactive
 
 # Overwrite existing config
-ccmds init --force
+ccmds init --force            # Works with both interactive/non-interactive
 ```
+
+**Interactive mode** prompts for:
+1. Document directories (with option to create non-existent dirs)
+2. Exclude patterns (common presets + custom)
+3. Output mode
+4. Advanced options (limit, fuzzy threshold, extensions, caching)
+
+**Non-interactive mode** is used automatically when:
+- Running in CI/CD pipelines (no TTY)
+- Using `--no-interactive` flag
+- Piping input/output
 
 ### File Locations
 
