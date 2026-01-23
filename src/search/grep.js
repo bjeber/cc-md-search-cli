@@ -42,16 +42,14 @@ export function grepSearch(files, query, options) {
       if (regex.test(line)) {
         const { start, end } = options.raw
           ? {
-              start: Math.max(0, index - options.context),
-              end: Math.min(lines.length - 1, index + options.context),
+              start: Math.max(0, index - (options.context ?? 3)),
+              end: Math.min(lines.length - 1, index + (options.context ?? 3)),
             }
           : extractSmartContext(lines, index, { extendShort: true });
 
         // Skip if this range overlaps with already processed
         const overlaps = processedRanges.some(
-          (r) =>
-            (start >= r.start && start <= r.end) ||
-            (end >= r.start && end <= r.end)
+          (r) => start <= r.end && end >= r.start
         );
 
         if (!overlaps) {
